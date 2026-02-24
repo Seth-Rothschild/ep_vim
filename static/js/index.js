@@ -597,6 +597,17 @@ const handleNormalKey = (rep, editorInfo, key) => {
     return true;
   }
 
+  if (pendingKey === "yi") {
+    pendingKey = null;
+    if (key === "w") {
+      const range = innerWordRange(lineText, char);
+      if (range) {
+        setRegister(lineText.slice(range.start, range.end));
+      }
+    }
+    return true;
+  }
+
   if (pendingKey === "y") {
     pendingKey = null;
 
@@ -608,6 +619,11 @@ const handleNormalKey = (rep, editorInfo, key) => {
         yankedLines.push(getLineText(rep, i));
       }
       setRegister(yankedLines);
+      return true;
+    }
+
+    if (key === "i") {
+      pendingKey = "yi";
       return true;
     }
 
