@@ -443,6 +443,20 @@ const handleNormalKey = (rep, editorInfo, key) => {
     return true;
   }
 
+  if (pendingKey === "di") {
+    pendingKey = null;
+    if (key === "w") {
+      const range = innerWordRange(lineText, char);
+      if (range) {
+        setRegister(lineText.slice(range.start, range.end));
+        replaceRange(editorInfo, [line, range.start], [line, range.end], "");
+        const newLineText = getLineText(rep, line);
+        moveBlockCursor(editorInfo, line, clampChar(range.start, newLineText));
+      }
+    }
+    return true;
+  }
+
   if (pendingKey === "d") {
     pendingKey = null;
 
@@ -476,6 +490,11 @@ const handleNormalKey = (rep, editorInfo, key) => {
         );
         moveBlockCursor(editorInfo, 0, 0);
       }
+      return true;
+    }
+
+    if (key === "i") {
+      pendingKey = "di";
       return true;
     }
 
