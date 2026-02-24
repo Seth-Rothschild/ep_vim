@@ -185,6 +185,34 @@ const getVisualSelection = (visualMode, visualAnchor, visualCursor, rep) => {
   return [visualCursor, visualAnchor];
 };
 
+const innerWordRange = (lineText, char) => {
+  if (lineText.length === 0 || char >= lineText.length) return null;
+  const ch = lineText[char];
+  let start = char;
+  let end = char;
+  if (isWordChar(ch)) {
+    while (start > 0 && isWordChar(lineText[start - 1])) start--;
+    while (end + 1 < lineText.length && isWordChar(lineText[end + 1])) end++;
+  } else if (isWhitespace(ch)) {
+    while (start > 0 && isWhitespace(lineText[start - 1])) start--;
+    while (end + 1 < lineText.length && isWhitespace(lineText[end + 1])) end++;
+  } else {
+    while (
+      start > 0 &&
+      !isWordChar(lineText[start - 1]) &&
+      !isWhitespace(lineText[start - 1])
+    )
+      start--;
+    while (
+      end + 1 < lineText.length &&
+      !isWordChar(lineText[end + 1]) &&
+      !isWhitespace(lineText[end + 1])
+    )
+      end++;
+  }
+  return { start, end: end + 1 };
+};
+
 const getTextInRange = (rep, start, end) => {
   if (start[0] === end[0]) {
     return getLineText(rep, start[0]).slice(start[1], end[1]);
@@ -213,6 +241,7 @@ module.exports = {
   charSearchPos,
   motionRange,
   charMotionRange,
+  innerWordRange,
   getVisualSelection,
   getTextInRange,
 };

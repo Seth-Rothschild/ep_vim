@@ -17,6 +17,7 @@ const {
   charSearchPos,
   motionRange,
   charMotionRange,
+  innerWordRange,
   getVisualSelection,
   getTextInRange,
 } = require("./vim-core");
@@ -350,6 +351,43 @@ describe("charMotionRange", () => {
   it("returns null when end would not exceed start", () => {
     const range = charMotionRange("t", 2, 2);
     assert.equal(range, null);
+  });
+});
+
+describe("innerWordRange", () => {
+  it("selects the whole word when cursor is in the middle", () => {
+    assert.deepEqual(innerWordRange("hello world", 2), { start: 0, end: 5 });
+  });
+
+  it("selects the whole word when cursor is at the start", () => {
+    assert.deepEqual(innerWordRange("hello world", 0), { start: 0, end: 5 });
+  });
+
+  it("selects the whole word when cursor is at the end", () => {
+    assert.deepEqual(innerWordRange("hello world", 4), { start: 0, end: 5 });
+  });
+
+  it("selects a word in the middle of a line", () => {
+    assert.deepEqual(innerWordRange("hello world foo", 6), {
+      start: 6,
+      end: 11,
+    });
+  });
+
+  it("selects whitespace when cursor is on whitespace", () => {
+    assert.deepEqual(innerWordRange("hello   world", 6), { start: 5, end: 8 });
+  });
+
+  it("selects a run of punctuation", () => {
+    assert.deepEqual(innerWordRange("foo...bar", 3), { start: 3, end: 6 });
+  });
+
+  it("returns null for empty string", () => {
+    assert.equal(innerWordRange("", 0), null);
+  });
+
+  it("returns null when char is out of bounds", () => {
+    assert.equal(innerWordRange("hello", 10), null);
   });
 });
 

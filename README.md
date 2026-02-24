@@ -6,7 +6,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 
 - **Modal editing** — normal, insert, and visual (char + line) modes
 - **Motions** — `h` `j` `k` `l`, `w` `b` `e`, `0` `$` `^`, `gg` `G`, `f`/`F`/`t`/`T` char search
-- **Operators** — `d`, `c`, `y` with motion combinations (`dw`, `ce`, `y$`, etc.)
+- **Operators** — `d`, `c`, `y` with motion combinations (`dw`, `ce`, `y$`, etc.) and text objects (`ciw`)
 - **Line operations** — `dd`, `cc`, `yy`, `J` (join), `Y` (yank line)
 - **Put** — `p` / `P` with linewise and characterwise register handling
 - **Editing** — `x`, `r`, `s`, `S`, `C`, `o`, `O`
