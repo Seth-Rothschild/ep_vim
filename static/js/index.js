@@ -951,6 +951,10 @@ exports.postAceInit = (_hookName, { ace }) => {
 exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
   if (!vimEnabled) return false;
   if (evt.type !== "keydown") return false;
+  const isBrowserShortcut =
+    (evt.ctrlKey || evt.metaKey) &&
+    (evt.key === "x" || evt.key === "c" || evt.key === "v" || evt.key === "r");
+  if (isBrowserShortcut) return false;
   currentRep = rep;
   if (!editorDoc) {
     editorDoc = evt.target.ownerDocument;
