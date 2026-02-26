@@ -1,5 +1,9 @@
 # ep_vim
 
+[![npm](https://img.shields.io/npm/v/ep_vim)](https://www.npmjs.com/package/ep_vim)
+[![GitHub](https://img.shields.io/badge/github-Seth--Rothschild%2Fep__vim-blue?logo=github)](https://github.com/Seth-Rothschild/ep_vim)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](https://www.gnu.org/licenses/gpl-3.0)
+
 A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with normal, insert, and visual modes to the pad editor.  Mostly vibe coded with [Claude Code](https://claude.ai/claude-code).
 
 ## Features
