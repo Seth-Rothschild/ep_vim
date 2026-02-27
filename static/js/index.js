@@ -89,7 +89,11 @@ const updateVisualSelection = (editorInfo, rep) => {
     state.visualCursor,
     rep,
   );
-  selectRange(editorInfo, start, end);
+  if (vMode === "char") {
+    selectRange(editorInfo, start, [end[0], end[1] + 1]);
+  } else {
+    selectRange(editorInfo, start, end);
+  }
 };
 
 const clearEmptyLineCursor = () => {
@@ -160,10 +164,11 @@ const applyLineOperator = (op, topLine, bottomLine, ctx) => {
     return;
   }
   if (op === "c") {
-    for (let i = topLine; i <= bottomLine; i++) {
-      const text = getLineText(rep, i);
-      replaceRange(editorInfo, [topLine, 0], [topLine, text.length], "");
+    if (bottomLine > topLine) {
+      deleteLines(editorInfo, rep, topLine + 1, bottomLine);
     }
+    const text = getLineText(rep, topLine);
+    replaceRange(editorInfo, [topLine, 0], [topLine, text.length], "");
     moveCursor(editorInfo, topLine, 0);
     state.mode = "insert";
     return;
@@ -234,19 +239,27 @@ const recordCommand = (key, count, param = null) => {
   state.lastCommand = { key, count, param };
 };
 
-const registerMotion = (key, getEndPos, inclusive = false) => {
+const registerMotion = (
+  key,
+  getEndPos,
+  inclusive = false,
+  keepDesiredColumn = false,
+) => {
   commands.normal[key] = (ctx) => {
-    state.desiredColumn = null;
+    if (!keepDesiredColumn) state.desiredColumn = null;
     const pos = getEndPos(ctx);
-    if (pos) moveBlockCursor(ctx.editorInfo, pos.line, pos.char);
+    if (pos) {
+      const lineText = getLineText(ctx.rep, pos.line);
+      moveBlockCursor(ctx.editorInfo, pos.line, clampChar(pos.char, lineText));
+    }
   };
   commands["visual-char"][key] = (ctx) => {
-    state.desiredColumn = null;
+    if (!keepDesiredColumn) state.desiredColumn = null;
     const pos = getEndPos(ctx);
     if (pos) moveVisualCursor(ctx.editorInfo, ctx.rep, pos.line, pos.char);
   };
   commands["visual-line"][key] = (ctx) => {
-    state.desiredColumn = null;
+    if (!keepDesiredColumn) state.desiredColumn = null;
     const pos = getEndPos(ctx);
     if (pos) moveVisualCursor(ctx.editorInfo, ctx.rep, pos.line, pos.char);
   };
@@ -323,7 +336,10 @@ const registerTextObject = (obj, getRange) => {
 
 const getVisibleLineRange = (rep) => {
   const totalLines = rep.lines.length();
-  if (!state.editorDoc) return { top: 0, bottom: totalLines - 1 };
+  if (!state.editorDoc) {
+    const mid = Math.floor((totalLines - 1) / 2);
+    return { top: 0, mid, bottom: totalLines - 1 };
+  }
   const lineDivs = state.editorDoc.body.querySelectorAll("div");
   const lineCount = Math.min(lineDivs.length, totalLines);
   const frameEl = state.editorDoc.defaultView.frameElement;
@@ -371,24 +387,40 @@ registerMotion("l", (ctx) => ({
   char: clampChar(ctx.char + ctx.count, ctx.lineText),
 }));
 
-registerMotion("j", (ctx) => {
-  if (state.desiredColumn === null) state.desiredColumn = ctx.char;
-  const newLine = clampLine(ctx.line + ctx.count, ctx.rep);
-  const newLineText = getLineText(ctx.rep, newLine);
-  return { line: newLine, char: clampChar(state.desiredColumn, newLineText) };
-});
+registerMotion(
+  "j",
+  (ctx) => {
+    if (state.desiredColumn === null) state.desiredColumn = ctx.char;
+    const newLine = clampLine(ctx.line + ctx.count, ctx.rep);
+    const newLineText = getLineText(ctx.rep, newLine);
+    return {
+      line: newLine,
+      char: clampChar(state.desiredColumn, newLineText),
+    };
+  },
+  false,
+  true,
+);
 
-registerMotion("k", (ctx) => {
-  if (state.desiredColumn === null) state.desiredColumn = ctx.char;
-  const newLine = clampLine(ctx.line - ctx.count, ctx.rep);
-  const newLineText = getLineText(ctx.rep, newLine);
-  return { line: newLine, char: clampChar(state.desiredColumn, newLineText) };
-});
+registerMotion(
+  "k",
+  (ctx) => {
+    if (state.desiredColumn === null) state.desiredColumn = ctx.char;
+    const newLine = clampLine(ctx.line - ctx.count, ctx.rep);
+    const newLineText = getLineText(ctx.rep, newLine);
+    return {
+      line: newLine,
+      char: clampChar(state.desiredColumn, newLineText),
+    };
+  },
+  false,
+  true,
+);
 
 registerMotion("w", (ctx) => {
   let pos = ctx.char;
   for (let i = 0; i < ctx.count; i++) pos = wordForward(ctx.lineText, pos);
-  return { line: ctx.line, char: clampChar(pos, ctx.lineText) };
+  return { line: ctx.line, char: pos };
 });
 
 registerMotion("b", (ctx) => {
@@ -667,7 +699,7 @@ for (const op of OPERATORS) {
       ctx.rep,
     );
     state.mode = "normal";
-    applyOperator(op, start, end, ctx);
+    applyOperator(op, start, [end[0], end[1] + 1], ctx);
   };
 }
 
@@ -678,13 +710,14 @@ commands["visual-char"]["~"] = (ctx) => {
     state.visualCursor,
     ctx.rep,
   );
-  const text = getTextInRange(ctx.rep, start, end);
+  const adjustedEnd = [end[0], end[1] + 1];
+  const text = getTextInRange(ctx.rep, start, adjustedEnd);
   let toggled = "";
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     toggled += ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
   }
-  replaceRange(ctx.editorInfo, start, end, toggled);
+  replaceRange(ctx.editorInfo, start, adjustedEnd, toggled);
   state.mode = "normal";
   moveBlockCursor(ctx.editorInfo, start[0], start[1]);
 };

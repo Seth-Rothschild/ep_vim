@@ -1507,16 +1507,89 @@ describe("visual mode", () => {
     state.lastSearch = null;
   });
 
-  it("v enters visual-char mode", () => {
-    const rep = makeRep(["hello"]);
+  it("v enters visual-char mode and shows character highlighted", () => {
+    const rep = makeRep(["abcdef"]);
     const { editorInfo, calls } = makeMockEditorInfo();
 
-    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    const ctx = { rep, editorInfo, line: 0, char: 1, lineText: "abcdef" };
     commands.normal["v"](ctx);
 
     assert.equal(state.mode, "visual-char");
-    assert.deepEqual(state.visualAnchor, [0, 2]);
+    assert.deepEqual(state.visualAnchor, [0, 1]);
+    assert.deepEqual(state.visualCursor, [0, 1]);
+    // Should call selectRange with [0,1] and [0,2] to show char at position 1 highlighted
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].start, [0, 1]);
+    assert.deepEqual(calls[0].end, [0, 2]);
+  });
+
+  it("l in visual-char mode extends selection correctly", () => {
+    const rep = makeRep(["abcdef"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 1];
+    state.visualCursor = [0, 1];
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "abcdef",
+      count: 1,
+    };
+    commands["visual-char"]["l"](ctx);
+
+    // After moving right once, cursor should be at position 2
     assert.deepEqual(state.visualCursor, [0, 2]);
+    // Should select from 1 to 3 (positions 1 and 2)
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].start, [0, 1]);
+    assert.deepEqual(calls[0].end, [0, 3]);
+  });
+
+  it("ll in visual-char mode extends selection to include cursor position", () => {
+    const rep = makeRep(["abcdef"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 1];
+    state.visualCursor = [0, 1];
+
+    // Press l twice to move from pos 1 to pos 3
+    const ctx1 = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "abcdef",
+      count: 2,
+    };
+    commands["visual-char"]["l"](ctx1);
+
+    // After moving right twice, cursor should be at position 3
+    assert.deepEqual(state.visualCursor, [0, 3]);
+    // Should select positions 1, 2, 3 -> range [1, 4)
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].start, [0, 1]);
+    assert.deepEqual(calls[0].end, [0, 4]);
+  });
+
+  it("d in visual-char deletes all selected characters including cursor", () => {
+    const rep = makeRep(["abcdef"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 1];
+    state.visualCursor = [0, 3];
+
+    const ctx = { rep, editorInfo, line: 0, char: 3, lineText: "abcdef" };
+    commands["visual-char"]["d"](ctx);
+
+    // Should delete positions 1, 2, 3 -> "bcd"
+    assert.equal(state.mode, "normal");
+    assert.equal(state.register, "bcd");
   });
 
   it("V enters visual-line mode", () => {
@@ -1529,21 +1602,6 @@ describe("visual mode", () => {
     assert.equal(state.mode, "visual-line");
     assert.deepEqual(state.visualAnchor, [0, 0]);
     assert.deepEqual(state.visualCursor, [0, 0]);
-  });
-
-  it("d in visual-char deletes selection", () => {
-    const rep = makeRep(["hello world"]);
-    const { editorInfo } = makeMockEditorInfo();
-
-    state.mode = "visual-char";
-    state.visualAnchor = [0, 0];
-    state.visualCursor = [0, 5];
-
-    const ctx = { rep, editorInfo, line: 0, char: 5, lineText: "hello world" };
-    commands["visual-char"]["d"](ctx);
-
-    assert.equal(state.mode, "normal");
-    assert.equal(state.register, "hello");
   });
 
   it("y in visual-line yanks lines", () => {
@@ -1936,5 +1994,1088 @@ describe("miscellaneous commands", () => {
     commands.normal["cl"](ctx);
 
     assert.equal(state.mode, "insert");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edge-case tests for vim motions and commands
+// ---------------------------------------------------------------------------
+
+const resetState = () => {
+  state.mode = "normal";
+  state.pendingKey = null;
+  state.pendingCount = null;
+  state.countBuffer = "";
+  state.register = null;
+  state.marks = {};
+  state.lastCharSearch = null;
+  state.visualAnchor = null;
+  state.visualCursor = null;
+  state.editorDoc = null;
+  state.currentRep = null;
+  state.desiredColumn = null;
+  state.lastCommand = null;
+  state.searchMode = false;
+  state.searchBuffer = "";
+  state.searchDirection = null;
+  state.lastSearch = null;
+};
+
+describe("edge cases: cc with count", () => {
+  beforeEach(resetState);
+
+  it("2cc should delete extra lines and clear remaining line", () => {
+    const rep = makeRep(["aaa", "bbb", "ccc"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "aaa",
+      count: 2,
+    };
+    commands.normal["cc"](ctx);
+
+    assert.equal(state.mode, "insert");
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    const deletesLine = replaces.some(
+      (r) =>
+        r.start[0] !== r.end[0] ||
+        (r.start[0] === r.end[0] && r.end[1] === 0 && r.start[1] === 0),
+    );
+    assert.ok(
+      deletesLine || replaces.length === 1,
+      "2cc should delete extra lines, not just clear text on each line separately",
+    );
+  });
+});
+
+describe("edge cases: motions on empty lines", () => {
+  beforeEach(resetState);
+
+  it("w on empty line stays on same position", () => {
+    const rep = makeRep([""]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "",
+      count: 1,
+    };
+    commands.normal["w"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0, "should produce a cursor move");
+    assert.deepEqual(selects[0].start, [0, 0]);
+  });
+
+  it("$ on empty line does not produce negative char", () => {
+    const rep = makeRep([""]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "",
+      count: 1,
+    };
+    commands.normal["$"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    const charPos = selects[0].start[1];
+    assert.ok(charPos >= 0, `$ on empty line gave char ${charPos}`);
+  });
+
+  it("x on empty line does nothing", () => {
+    const rep = makeRep([""]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "",
+      count: 1,
+    };
+    commands.normal["x"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.equal(replaces.length, 0, "x on empty line should not replace");
+  });
+
+  it("~ on empty line does nothing", () => {
+    const rep = makeRep([""]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "",
+      count: 1,
+    };
+    commands.normal["~"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.equal(replaces.length, 0, "~ on empty line should not replace");
+  });
+});
+
+describe("edge cases: boundary motions", () => {
+  beforeEach(resetState);
+
+  it("h at column 0 stays at column 0", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["h"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.deepEqual(selects[0].start, [0, 0]);
+  });
+
+  it("l at last character stays at last character", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 4,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["l"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.deepEqual(
+      selects[0].start,
+      [0, 4],
+      "l at last char should not go past it",
+    );
+  });
+
+  it("j at last line stays at last line", () => {
+    const rep = makeRep(["line1", "line2"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "line2",
+      count: 1,
+    };
+    commands.normal["j"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(selects[0].start[0], 1, "j at last line should stay");
+  });
+
+  it("k at first line stays at first line", () => {
+    const rep = makeRep(["line1", "line2"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line1",
+      count: 1,
+    };
+    commands.normal["k"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(selects[0].start[0], 0, "k at first line should stay");
+  });
+});
+
+describe("edge cases: t/f adjacent and edge positions", () => {
+  beforeEach(resetState);
+
+  it("t to adjacent char should not move (lands on self)", () => {
+    const rep = makeRep(["ab"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "ab",
+      count: 1,
+    };
+    parameterized["t"]("b", ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    if (selects.length > 0) {
+      assert.deepEqual(
+        selects[0].start,
+        [0, 0],
+        "t to adjacent char should not move forward (would land on current pos)",
+      );
+    }
+  });
+
+  it("f at end of line should not find char", () => {
+    const rep = makeRep(["abc"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "abc",
+      count: 1,
+    };
+    parameterized["f"]("x", ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(selects.length, 0, "f for missing char should not move");
+  });
+
+  it("F at start of line should not find char", () => {
+    const rep = makeRep(["abc"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "abc",
+      count: 1,
+    };
+    parameterized["F"]("x", ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(selects.length, 0, "F for missing char should not move");
+  });
+});
+
+describe("edge cases: dd edge cases", () => {
+  beforeEach(resetState);
+
+  it("dd on single-line document leaves empty line", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["dd"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.equal(
+      replaces[0].newText,
+      "",
+      "dd on single line should clear content",
+    );
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(replaces[0].end, [0, 5]);
+  });
+
+  it("3dd with only 2 lines remaining deletes to end", () => {
+    const rep = makeRep(["aaa", "bbb"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "aaa",
+      count: 3,
+    };
+    commands.normal["dd"](ctx);
+
+    assert.ok(Array.isArray(state.register), "dd should yank lines as array");
+    assert.equal(
+      state.register.length,
+      2,
+      "3dd on 2-line doc should yank both lines",
+    );
+  });
+});
+
+describe("edge cases: J (join) edge cases", () => {
+  beforeEach(resetState);
+
+  it("J on last line does nothing", () => {
+    const rep = makeRep(["only line"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "only line",
+      count: 1,
+    };
+    commands.normal["J"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.equal(replaces.length, 0, "J on last line should not join");
+  });
+
+  it("J trims leading whitespace from joined line", () => {
+    const rep = makeRep(["hello", "   world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["J"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.equal(
+      replaces[0].newText,
+      " world",
+      "J should trim leading whitespace and add single space",
+    );
+  });
+});
+
+describe("edge cases: count handling", () => {
+  beforeEach(resetState);
+
+  it("count 0 after digits is part of count (e.g., 10j)", () => {
+    const rep = makeRep(Array.from({ length: 20 }, (_, i) => `line${i}`));
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const baseCtx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line0",
+    };
+
+    handleKey("1", baseCtx);
+    handleKey("0", baseCtx);
+    handleKey("j", baseCtx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    assert.equal(
+      selects[selects.length - 1].start[0],
+      10,
+      "10j should go to line 10",
+    );
+  });
+
+  it("0 without prior digits is motion to column 0", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 5,
+      lineText: "hello world",
+    };
+
+    handleKey("0", ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    assert.deepEqual(selects[0].start, [0, 0]);
+  });
+});
+
+describe("edge cases: dw at end of line", () => {
+  beforeEach(resetState);
+
+  it("dw at last word deletes to end of line", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 6,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["dw"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    const deleted = ctx.lineText.slice(
+      replaces[0].start[1],
+      replaces[0].end[1],
+    );
+    assert.equal(
+      deleted,
+      "world",
+      "dw at last word should delete to end of line",
+    );
+  });
+});
+
+describe("edge cases: d$ and D", () => {
+  beforeEach(resetState);
+
+  it("d$ at last char deletes that character", () => {
+    const rep = makeRep(["abc"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "abc",
+      count: 1,
+    };
+    commands.normal["d$"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 2]);
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 3],
+      "d$ at last char should delete it (inclusive)",
+    );
+  });
+
+  it("D at column 0 deletes entire line content", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["D"](ctx);
+
+    assert.equal(state.register, "hello");
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(replaces[0].end, [0, 5]);
+  });
+});
+
+describe("edge cases: p (paste) edge cases", () => {
+  beforeEach(resetState);
+
+  it("p on empty line pastes at position 0 (not 1)", () => {
+    const rep = makeRep([""]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.register = "text";
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "",
+      count: 1,
+    };
+    commands.normal["p"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.equal(
+      replaces[0].start[1],
+      0,
+      "p on empty line should paste at 0, not 1",
+    );
+  });
+
+  it("P with nothing in register does nothing", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.register = null;
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["P"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.equal(replaces.length, 0);
+  });
+});
+
+describe("edge cases: w/b word motions", () => {
+  beforeEach(resetState);
+
+  it("w at last word on line clamps to end", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 6,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["w"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    const endChar = selects[0].start[1];
+    assert.ok(
+      endChar <= 10,
+      `w at last word should clamp to line end, got ${endChar}`,
+    );
+  });
+
+  it("b at first word stays at position 0", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["b"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    assert.deepEqual(selects[0].start, [0, 0]);
+  });
+
+  it("w on line with only spaces", () => {
+    const rep = makeRep(["   "]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "   ",
+      count: 1,
+    };
+    commands.normal["w"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    assert.ok(
+      selects[0].start[1] >= 0,
+      "w on whitespace-only line should not crash",
+    );
+  });
+
+  it("e on single character word", () => {
+    const rep = makeRep(["a b c"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "a b c",
+      count: 1,
+    };
+    commands.normal["e"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.ok(selects.length > 0);
+    assert.equal(
+      selects[0].start[1],
+      2,
+      "e from 'a' should jump to 'b' (next word end)",
+    );
+  });
+});
+
+describe("edge cases: j/k desiredColumn stickiness", () => {
+  beforeEach(resetState);
+
+  it("j through short line preserves desired column", () => {
+    const rep = makeRep(["long line here", "ab", "long line here"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx1 = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 10,
+      lineText: "long line here",
+      count: 1,
+    };
+    commands.normal["j"](ctx1);
+
+    const select1 = calls.filter((c) => c.type === "select");
+    assert.equal(select1[0].start[0], 1, "should be on line 1");
+    assert.equal(
+      select1[0].start[1],
+      1,
+      "should clamp to last char of short line",
+    );
+
+    const ctx2 = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 1,
+      lineText: "ab",
+      count: 1,
+    };
+    commands.normal["j"](ctx2);
+
+    const select2 = calls.filter((c) => c.type === "select");
+    const lastSelect = select2[select2.length - 1];
+    assert.equal(lastSelect.start[0], 2);
+    assert.equal(
+      lastSelect.start[1],
+      10,
+      "j should restore desired column on longer line",
+    );
+  });
+
+  it("h resets desired column", () => {
+    const rep = makeRep(["long line here", "ab", "long line here"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx1 = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 10,
+      lineText: "long line here",
+      count: 1,
+    };
+    commands.normal["j"](ctx1);
+
+    commands.normal["h"]({
+      rep,
+      editorInfo,
+      line: 1,
+      char: 1,
+      lineText: "ab",
+      count: 1,
+    });
+
+    commands.normal["j"]({
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "ab",
+      count: 1,
+    });
+
+    const selects = calls.filter((c) => c.type === "select");
+    const lastSelect = selects[selects.length - 1];
+    assert.equal(lastSelect.start[0], 2);
+    assert.equal(
+      lastSelect.start[1],
+      0,
+      "h should reset desiredColumn so subsequent j uses actual column",
+    );
+  });
+});
+
+describe("edge cases: visual mode text objects", () => {
+  beforeEach(resetState);
+
+  it("viw in visual mode selects inner word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 3];
+    state.visualCursor = [0, 3];
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 3,
+      lineText: "hello world",
+      count: 1,
+    };
+
+    handleKey("i", ctx);
+    handleKey("w", ctx);
+
+    assert.deepEqual(
+      state.visualAnchor,
+      [0, 0],
+      "viw anchor should be word start",
+    );
+    assert.deepEqual(
+      state.visualCursor,
+      [0, 5],
+      "viw cursor should be word end",
+    );
+  });
+});
+
+describe("edge cases: de vs dw", () => {
+  beforeEach(resetState);
+
+  it("de deletes to end of current word (inclusive)", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["de"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 5],
+      "de should delete 'hello' (inclusive of last char)",
+    );
+  });
+
+  it("dw at start of word deletes word and trailing space", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["dw"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 6],
+      "dw should delete 'hello ' (word + trailing space)",
+    );
+  });
+});
+
+describe("edge cases: gg and G with count", () => {
+  beforeEach(resetState);
+
+  it("5gg goes to line 5 (0-indexed line 4)", () => {
+    const rep = makeRep(Array.from({ length: 10 }, (_, i) => `line${i}`));
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line0",
+      count: 5,
+      hasCount: true,
+    };
+    commands.normal["gg"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(
+      selects[0].start[0],
+      4,
+      "5gg should go to line index 4 (line 5)",
+    );
+  });
+
+  it("gg with count beyond document clamps to last line", () => {
+    const rep = makeRep(["line0", "line1", "line2"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line0",
+      count: 100,
+      hasCount: true,
+    };
+    commands.normal["gg"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(
+      selects[0].start[0],
+      2,
+      "gg with huge count should clamp to last line",
+    );
+  });
+
+  it("G without count goes to last line", () => {
+    const rep = makeRep(["line0", "line1", "line2"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line0",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["G"](ctx);
+
+    const selects = calls.filter((c) => c.type === "select");
+    assert.equal(selects[0].start[0], 2, "G should go to last line");
+  });
+});
+
+describe("edge cases: s with count", () => {
+  beforeEach(resetState);
+
+  it("3s at position 1 deletes 3 chars and enters insert", () => {
+    const rep = makeRep(["abcdef"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "abcdef",
+      count: 3,
+    };
+    commands.normal["s"](ctx);
+
+    assert.equal(state.mode, "insert");
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 1]);
+    assert.deepEqual(replaces[0].end, [0, 4], "3s should delete 3 chars");
+  });
+
+  it("s with count exceeding line length clamps", () => {
+    const rep = makeRep(["ab"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "ab",
+      count: 10,
+    };
+    commands.normal["s"](ctx);
+
+    assert.equal(state.mode, "insert");
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 2],
+      "s with large count should clamp to line length",
+    );
+  });
+});
+
+describe("edge cases: x at end of line", () => {
+  beforeEach(resetState);
+
+  it("x at last character should delete it", () => {
+    const rep = makeRep(["abc"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "abc",
+      count: 1,
+    };
+    commands.normal["x"](ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.equal(state.register, "c");
+  });
+
+  it("3x with only 2 chars remaining deletes what's available", () => {
+    const rep = makeRep(["abcd"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "abcd",
+      count: 3,
+    };
+    commands.normal["x"](ctx);
+
+    assert.equal(state.register, "cd", "3x with 2 remaining should delete 2");
+  });
+});
+
+describe("edge cases: df and dt (operator + char motion)", () => {
+  beforeEach(resetState);
+
+  it("df deletes up to and including target char", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    parameterized["df"]("o", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 5],
+      "df o should delete 'hello' (inclusive of 'o' at position 4)",
+    );
+  });
+
+  it("dt deletes up to but not including target char", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    parameterized["dt"]("o", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(replaces[0].start, [0, 0]);
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 4],
+      "dt o should delete 'hell' (up to but not including 'o')",
+    );
+  });
+
+  it("dF deletes backward including target", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 7,
+      lineText: "hello world",
+      count: 1,
+    };
+    parameterized["dF"]("o", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(
+      replaces[0].start,
+      [0, 4],
+      "dF o from pos 7 should start at 'o' (pos 4)",
+    );
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 8],
+      "dF o from pos 7 should delete up to and including cursor pos",
+    );
+  });
+
+  it("dT deletes backward not including target", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 7,
+      lineText: "hello world",
+      count: 1,
+    };
+    parameterized["dT"]("o", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0);
+    assert.deepEqual(
+      replaces[0].start,
+      [0, 5],
+      "dT o from pos 7 should start after 'o' (pos 5)",
+    );
+    assert.deepEqual(
+      replaces[0].end,
+      [0, 7],
+      "dT o from pos 7 should end before cursor",
+    );
   });
 });
