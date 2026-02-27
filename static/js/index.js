@@ -37,6 +37,7 @@ let visualCursor = null;
 let editorDoc = null;
 let currentRep = null;
 let desiredColumn = null;
+let lastCommand = null;
 
 // --- Editor operations ---
 
@@ -218,6 +219,10 @@ const resolveTextObject = (key, type, line, lineText, char, rep) => {
   return { startLine: line, startChar: r.start, endLine: line, endChar: r.end };
 };
 
+const recordCommand = (key, count, param = null) => {
+  lastCommand = { key, count, param };
+};
+
 const registerMotion = (key, getEndPos) => {
   commands.normal[key] = (ctx) => {
     desiredColumn = null;
@@ -238,8 +243,10 @@ const registerMotion = (key, getEndPos) => {
     commands.normal[op + key] = (ctx) => {
       desiredColumn = null;
       const pos = getEndPos(ctx);
-      if (pos)
+      if (pos) {
         applyOperator(op, [ctx.line, ctx.char], [pos.line, pos.char], ctx);
+        recordCommand(op + key, ctx.count);
+      }
     };
   }
 };
@@ -265,6 +272,7 @@ const registerParamMotion = (key, getEndChar) => {
       } else {
         moveBlockCursor(ctx.editorInfo, ctx.line, pos);
       }
+      recordCommand(key, ctx.count, argKey);
     }
   };
   for (const op of OPERATORS) {
@@ -284,6 +292,7 @@ const registerParamMotion = (key, getEndChar) => {
             [ctx.line, range.end],
             ctx,
           );
+        recordCommand(combo, ctx.count, argKey);
       }
     };
   }
@@ -618,6 +627,7 @@ for (const op of OPERATORS) {
   commands.normal[op + op] = (ctx) => {
     const bottomLine = clampLine(ctx.line + ctx.count - 1, ctx.rep);
     applyLineOperator(op, ctx.line, bottomLine, ctx);
+    recordCommand(op + op, ctx.count);
   };
 }
 
@@ -701,6 +711,17 @@ commands.normal["u"] = ({ editorInfo }) => {
   editorInfo.ace_doUndoRedo("undo");
 };
 
+commands.normal["."] = (ctx) => {
+  if (!lastCommand) return;
+  const { key, count, param } = lastCommand;
+  if (param !== null && parameterized[key]) {
+    parameterized[key](param, ctx);
+  } else if (commands[mode] && commands[mode][key]) {
+    const newCtx = { ...ctx, count };
+    commands[mode][key](newCtx);
+  }
+};
+
 // --- Mode transitions ---
 
 commands.normal["i"] = ({ editorInfo, line, char }) => {
@@ -753,10 +774,11 @@ commands.normal["O"] = ({ editorInfo, line }) => {
 commands.normal["r"] = () => {
   pendingKey = "r";
 };
-parameterized["r"] = (key, { editorInfo, line, char, lineText }) => {
+parameterized["r"] = (key, { editorInfo, line, char, lineText, count }) => {
   if (lineText.length > 0) {
     replaceRange(editorInfo, [line, char], [line, char + 1], key);
     moveBlockCursor(editorInfo, line, char);
+    recordCommand("r", count, key);
   }
 };
 
@@ -771,6 +793,7 @@ commands.normal["x"] = ({ editorInfo, rep, line, char, lineText, count }) => {
     replaceRange(editorInfo, [line, char], [line, char + deleteCount], "");
     const newLineText = getLineText(rep, line);
     moveBlockCursor(editorInfo, line, clampChar(char, newLineText));
+    recordCommand("x", count);
   }
 };
 
@@ -794,6 +817,7 @@ commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
       );
       moveBlockCursor(editorInfo, line + 1, 0);
     }
+    recordCommand("p", count);
   }
 };
 
@@ -811,6 +835,7 @@ commands.normal["P"] = ({ editorInfo, line, char, count }) => {
       replaceRange(editorInfo, [line, 0], [line, 0], insertText);
       moveBlockCursor(editorInfo, line, 0);
     }
+    recordCommand("P", count);
   }
 };
 
@@ -832,6 +857,7 @@ commands.normal["J"] = ({ editorInfo, rep, line, lineText, count }) => {
     );
   }
   moveBlockCursor(editorInfo, line, cursorChar);
+  recordCommand("J", count);
 };
 
 commands.normal["~"] = ({ editorInfo, rep, line, char, lineText, count }) => {
@@ -846,6 +872,7 @@ commands.normal["~"] = ({ editorInfo, rep, line, char, lineText, count }) => {
     replaceRange(editorInfo, [line, char], [line, char + toggleCount], toggled);
     const newChar = Math.min(char + toggleCount, lineText.length - 1);
     moveBlockCursor(editorInfo, line, newChar);
+    recordCommand("~", count);
   }
 };
 
@@ -853,6 +880,7 @@ commands.normal["D"] = ({ editorInfo, line, char, lineText }) => {
   setRegister(lineText.slice(char));
   replaceRange(editorInfo, [line, char], [line, lineText.length], "");
   moveBlockCursor(editorInfo, line, clampChar(char, ""));
+  recordCommand("D", 1);
 };
 
 commands.normal["C"] = ({ editorInfo, line, char, lineText }) => {
@@ -860,6 +888,7 @@ commands.normal["C"] = ({ editorInfo, line, char, lineText }) => {
   replaceRange(editorInfo, [line, char], [line, lineText.length], "");
   moveCursor(editorInfo, line, char);
   mode = "insert";
+  recordCommand("C", 1);
 };
 
 commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
@@ -872,6 +901,7 @@ commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
   );
   moveCursor(editorInfo, line, char);
   mode = "insert";
+  recordCommand("s", count);
 };
 
 commands.normal["S"] = ({ editorInfo, line, lineText }) => {
@@ -879,6 +909,7 @@ commands.normal["S"] = ({ editorInfo, line, lineText }) => {
   replaceRange(editorInfo, [line, 0], [line, lineText.length], "");
   moveCursor(editorInfo, line, 0);
   mode = "insert";
+  recordCommand("S", 1);
 };
 
 // --- Dispatch ---
