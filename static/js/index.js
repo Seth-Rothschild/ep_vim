@@ -232,7 +232,7 @@ const recordCommand = (key, count, param = null) => {
   lastCommand = { key, count, param };
 };
 
-const registerMotion = (key, getEndPos) => {
+const registerMotion = (key, getEndPos, inclusive = false) => {
   commands.normal[key] = (ctx) => {
     desiredColumn = null;
     const pos = getEndPos(ctx);
@@ -253,7 +253,8 @@ const registerMotion = (key, getEndPos) => {
       desiredColumn = null;
       const pos = getEndPos(ctx);
       if (pos) {
-        applyOperator(op, [ctx.line, ctx.char], [pos.line, pos.char], ctx);
+        const endChar = inclusive ? pos.char + 1 : pos.char;
+        applyOperator(op, [ctx.line, ctx.char], [pos.line, endChar], ctx);
         recordCommand(op + key, ctx.count);
       }
     };
@@ -394,18 +395,26 @@ registerMotion("b", (ctx) => {
   return { line: ctx.line, char: pos };
 });
 
-registerMotion("e", (ctx) => {
-  let pos = ctx.char;
-  for (let i = 0; i < ctx.count; i++) pos = wordEnd(ctx.lineText, pos);
-  return { line: ctx.line, char: clampChar(pos, ctx.lineText) };
-});
+registerMotion(
+  "e",
+  (ctx) => {
+    let pos = ctx.char;
+    for (let i = 0; i < ctx.count; i++) pos = wordEnd(ctx.lineText, pos);
+    return { line: ctx.line, char: clampChar(pos, ctx.lineText) };
+  },
+  true,
+);
 
 registerMotion("0", (_ctx) => ({ line: _ctx.line, char: 0 }));
 
-registerMotion("$", (ctx) => ({
-  line: ctx.line,
-  char: clampChar(ctx.lineText.length - 1, ctx.lineText),
-}));
+registerMotion(
+  "$",
+  (ctx) => ({
+    line: ctx.line,
+    char: clampChar(ctx.lineText.length - 1, ctx.lineText),
+  }),
+  true,
+);
 
 registerMotion("^", (ctx) => ({
   line: ctx.line,
@@ -434,10 +443,14 @@ registerMotion("}", (ctx) => ({
   char: 0,
 }));
 
-registerMotion("%", (ctx) => {
-  const pos = matchingBracketPos(ctx.rep, ctx.line, ctx.char);
-  return pos || { line: ctx.line, char: ctx.char };
-});
+registerMotion(
+  "%",
+  (ctx) => {
+    const pos = matchingBracketPos(ctx.rep, ctx.line, ctx.char);
+    return pos || { line: ctx.line, char: ctx.char };
+  },
+  true,
+);
 
 registerMotion("H", (ctx) => {
   const { top } = getVisibleLineRange(ctx.rep);
@@ -575,20 +588,41 @@ parameterized["m"] = (key, ctx) => {
 commands.normal["'"] = () => {
   pendingKey = "'";
 };
+commands["visual-char"]["'"] = () => {
+  pendingKey = "'";
+};
+commands["visual-line"]["'"] = () => {
+  pendingKey = "'";
+};
 parameterized["'"] = (key, ctx) => {
   if (!marks[key]) return;
   const [markLine] = marks[key];
   const targetText = getLineText(ctx.rep, markLine);
-  moveBlockCursor(ctx.editorInfo, markLine, firstNonBlank(targetText));
+  const targetChar = firstNonBlank(targetText);
+  if (mode.startsWith("visual")) {
+    moveVisualCursor(ctx.editorInfo, ctx.rep, markLine, targetChar);
+  } else {
+    moveBlockCursor(ctx.editorInfo, markLine, targetChar);
+  }
 };
 
 commands.normal["`"] = () => {
   pendingKey = "`";
 };
+commands["visual-char"]["`"] = () => {
+  pendingKey = "`";
+};
+commands["visual-line"]["`"] = () => {
+  pendingKey = "`";
+};
 parameterized["`"] = (key, ctx) => {
   if (!marks[key]) return;
   const [markLine, markChar] = marks[key];
-  moveBlockCursor(ctx.editorInfo, markLine, markChar);
+  if (mode.startsWith("visual")) {
+    moveVisualCursor(ctx.editorInfo, ctx.rep, markLine, markChar);
+  } else {
+    moveBlockCursor(ctx.editorInfo, markLine, markChar);
+  }
 };
 
 // --- Text objects ---
@@ -734,21 +768,25 @@ commands.normal["."] = (ctx) => {
 // --- Mode transitions ---
 
 commands.normal["i"] = ({ editorInfo, line, char }) => {
+  clearEmptyLineCursor();
   moveCursor(editorInfo, line, char);
   mode = "insert";
 };
 
 commands.normal["a"] = ({ editorInfo, line, char, lineText }) => {
+  clearEmptyLineCursor();
   moveCursor(editorInfo, line, Math.min(char + 1, lineText.length));
   mode = "insert";
 };
 
 commands.normal["A"] = ({ editorInfo, line, lineText }) => {
+  clearEmptyLineCursor();
   moveCursor(editorInfo, line, lineText.length);
   mode = "insert";
 };
 
 commands.normal["I"] = ({ editorInfo, line, lineText }) => {
+  clearEmptyLineCursor();
   moveCursor(editorInfo, line, firstNonBlank(lineText));
   mode = "insert";
 };
@@ -761,7 +799,16 @@ commands["visual-char"]["a"] = () => {
   pendingKey = "a";
 };
 
+commands["visual-line"]["i"] = () => {
+  pendingKey = "i";
+};
+
+commands["visual-line"]["a"] = () => {
+  pendingKey = "a";
+};
+
 commands.normal["o"] = ({ editorInfo, line, lineText }) => {
+  clearEmptyLineCursor();
   replaceRange(
     editorInfo,
     [line, lineText.length],
@@ -773,6 +820,7 @@ commands.normal["o"] = ({ editorInfo, line, lineText }) => {
 };
 
 commands.normal["O"] = ({ editorInfo, line }) => {
+  clearEmptyLineCursor();
   replaceRange(editorInfo, [line, 0], [line, 0], "\n");
   moveCursor(editorInfo, line, 0);
   mode = "insert";
@@ -885,14 +933,16 @@ commands.normal["~"] = ({ editorInfo, rep, line, char, lineText, count }) => {
   }
 };
 
-commands.normal["D"] = ({ editorInfo, line, char, lineText }) => {
+commands.normal["D"] = ({ editorInfo, rep, line, char, lineText }) => {
   setRegister(lineText.slice(char));
   replaceRange(editorInfo, [line, char], [line, lineText.length], "");
-  moveBlockCursor(editorInfo, line, clampChar(char, ""));
+  const newLineText = getLineText(rep, line);
+  moveBlockCursor(editorInfo, line, clampChar(char, newLineText));
   recordCommand("D", 1);
 };
 
 commands.normal["C"] = ({ editorInfo, line, char, lineText }) => {
+  clearEmptyLineCursor();
   setRegister(lineText.slice(char));
   replaceRange(editorInfo, [line, char], [line, lineText.length], "");
   moveCursor(editorInfo, line, char);
@@ -901,6 +951,7 @@ commands.normal["C"] = ({ editorInfo, line, char, lineText }) => {
 };
 
 commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
+  clearEmptyLineCursor();
   setRegister(lineText.slice(char, char + 1));
   replaceRange(
     editorInfo,
@@ -914,6 +965,7 @@ commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
 };
 
 commands.normal["S"] = ({ editorInfo, line, lineText }) => {
+  clearEmptyLineCursor();
   setRegister(lineText);
   replaceRange(editorInfo, [line, 0], [line, lineText.length], "");
   moveCursor(editorInfo, line, 0);
@@ -1005,7 +1057,10 @@ const handleKey = (key, ctx) => {
     return true;
   }
 
-  if (mode === "visual-char" && (pendingKey === "i" || pendingKey === "a")) {
+  if (
+    (mode === "visual-char" || mode === "visual-line") &&
+    (pendingKey === "i" || pendingKey === "a")
+  ) {
     const type = pendingKey;
     pendingKey = null;
     const range = resolveTextObject(
