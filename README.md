@@ -6,6 +6,8 @@
 
 A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with normal, insert, and visual modes to the pad editor.  Mostly vibe coded with [Claude Code](https://claude.ai/claude-code).
 
+![demo](./demo.gif)
+
 ## Features
 
 - **Modal editing** — normal, insert, and visual (char + line) modes
@@ -18,6 +20,8 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Put** — `p` / `P` with linewise and characterwise register handling
 - **Editing** — `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
+- **Search** — `/` and `?` forward/backward, `n`/`N` repeat
+- **Repeat** — `.` repeat last command
 - **Counts** — numeric prefixes work with motions and operators
 - **Undo** — `u`
 - **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage
