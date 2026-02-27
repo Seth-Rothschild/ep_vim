@@ -301,6 +301,79 @@ const textBracketRange = (lineText, char, bracket, type) => {
   return null;
 };
 
+const getFullText = (rep) => {
+  const lines = [];
+  for (let i = 0; i < rep.lines.length(); i++) {
+    lines.push(getLineText(rep, i));
+  }
+  return lines.join("\n");
+};
+
+const posToAbsolute = (rep, line, char) => {
+  let pos = 0;
+  for (let i = 0; i < line; i++) {
+    pos += getLineText(rep, i).length + 1;
+  }
+  return pos + char;
+};
+
+const absoluteToPos = (rep, absPos) => {
+  let pos = 0;
+  const totalLines = rep.lines.length();
+  for (let i = 0; i < totalLines; i++) {
+    const lineLen = getLineText(rep, i).length;
+    if (pos + lineLen + 1 > absPos) {
+      return [i, absPos - pos];
+    }
+    pos += lineLen + 1;
+  }
+  return [totalLines - 1, getLineText(rep, totalLines - 1).length];
+};
+
+const searchForward = (rep, fromLine, fromChar, pattern, count = 1) => {
+  if (!pattern || pattern.length === 0) return null;
+  const text = getFullText(rep);
+  let currentPos = posToAbsolute(rep, fromLine, fromChar);
+  let matchPos = -1;
+  for (let i = 0; i < count; i++) {
+    matchPos = text.indexOf(pattern, currentPos);
+    if (matchPos !== -1) {
+      currentPos = matchPos + pattern.length;
+    } else {
+      matchPos = text.indexOf(pattern);
+      if (matchPos !== -1) {
+        currentPos = matchPos + pattern.length;
+      } else {
+        return null;
+      }
+    }
+  }
+  return absoluteToPos(rep, matchPos);
+};
+
+const searchBackward = (rep, fromLine, fromChar, pattern, count = 1) => {
+  if (!pattern || pattern.length === 0) return null;
+  const text = getFullText(rep);
+  let currentPos = posToAbsolute(rep, fromLine, fromChar);
+  let matchPos = -1;
+  for (let i = 0; i < count; i++) {
+    if (currentPos > 0) {
+      matchPos = text.lastIndexOf(pattern, currentPos - 1);
+      if (matchPos !== -1) {
+        currentPos = matchPos;
+        continue;
+      }
+    }
+    matchPos = text.lastIndexOf(pattern);
+    if (matchPos !== -1) {
+      currentPos = matchPos;
+    } else {
+      return null;
+    }
+  }
+  return absoluteToPos(rep, matchPos);
+};
+
 const offsetToPos = (rep, offset) => {
   const totalLines = rep.lines.length();
   for (let i = 0; i < totalLines; i++) {
@@ -465,4 +538,9 @@ module.exports = {
   matchingBracketPos,
   paragraphTextRange,
   sentenceTextRange,
+  getFullText,
+  posToAbsolute,
+  absoluteToPos,
+  searchForward,
+  searchBackward,
 };

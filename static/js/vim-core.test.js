@@ -24,6 +24,11 @@ const {
   paragraphForward,
   paragraphBackward,
   getTextInRange,
+  getFullText,
+  posToAbsolute,
+  absoluteToPos,
+  searchForward,
+  searchBackward,
 } = require("./vim-core");
 
 const makeRep = (lines) => ({
@@ -672,5 +677,118 @@ describe("paragraphBackward", () => {
 
   it("jumps from blank line to previous blank line", () => {
     assert.equal(paragraphBackward(rep, 5, 1), 2);
+  });
+});
+
+describe("getFullText", () => {
+  it("joins lines with newlines", () => {
+    const rep = makeRep(["hello", "world", "test"]);
+    assert.equal(getFullText(rep), "hello\nworld\ntest");
+  });
+
+  it("handles single line", () => {
+    const rep = makeRep(["hello"]);
+    assert.equal(getFullText(rep), "hello");
+  });
+
+  it("handles empty lines", () => {
+    const rep = makeRep(["hello", "", "world"]);
+    assert.equal(getFullText(rep), "hello\n\nworld");
+  });
+});
+
+describe("posToAbsolute and absoluteToPos", () => {
+  const rep = makeRep(["hello", "world", "test"]);
+
+  it("converts position to absolute and back", () => {
+    assert.deepEqual(absoluteToPos(rep, posToAbsolute(rep, 0, 0)), [0, 0]);
+    assert.deepEqual(absoluteToPos(rep, posToAbsolute(rep, 0, 3)), [0, 3]);
+    assert.deepEqual(absoluteToPos(rep, posToAbsolute(rep, 1, 0)), [1, 0]);
+    assert.deepEqual(absoluteToPos(rep, posToAbsolute(rep, 1, 2)), [1, 2]);
+    assert.deepEqual(absoluteToPos(rep, posToAbsolute(rep, 2, 4)), [2, 4]);
+  });
+
+  it("converts line start positions correctly", () => {
+    assert.equal(posToAbsolute(rep, 0, 0), 0);
+    assert.equal(posToAbsolute(rep, 1, 0), 6);
+    assert.equal(posToAbsolute(rep, 2, 0), 12);
+  });
+});
+
+describe("searchForward", () => {
+  const rep = makeRep(["hello world", "foo hello bar", "hello"]);
+
+  it("finds pattern forward from position", () => {
+    const pos = searchForward(rep, 0, 0, "hello");
+    assert.deepEqual(pos, [0, 0]);
+  });
+
+  it("finds next occurrence after cursor", () => {
+    const pos = searchForward(rep, 0, 6, "hello");
+    assert.deepEqual(pos, [1, 4]);
+  });
+
+  it("wraps to beginning when pattern not found after cursor", () => {
+    const pos = searchForward(rep, 2, 5, "hello");
+    assert.deepEqual(pos, [0, 0]);
+  });
+
+  it("finds pattern across lines", () => {
+    const pos = searchForward(rep, 0, 0, "world");
+    assert.deepEqual(pos, [0, 6]);
+  });
+
+  it("returns null for empty pattern", () => {
+    assert.equal(searchForward(rep, 0, 0, ""), null);
+  });
+
+  it("returns null when pattern not found", () => {
+    assert.equal(searchForward(rep, 0, 0, "xyz"), null);
+  });
+});
+
+describe("searchBackward", () => {
+  const rep = makeRep(["hello world", "foo hello bar", "hello"]);
+
+  it("finds pattern backward from position", () => {
+    const pos = searchBackward(rep, 2, 5, "hello");
+    assert.deepEqual(pos, [2, 0]);
+  });
+
+  it("finds previous occurrence before cursor", () => {
+    const pos = searchBackward(rep, 2, 0, "hello");
+    assert.deepEqual(pos, [1, 4]);
+  });
+
+  it("wraps to end when pattern not found before cursor", () => {
+    const pos = searchBackward(rep, 0, 0, "hello");
+    assert.deepEqual(pos, [2, 0]);
+  });
+
+  it("returns null for empty pattern", () => {
+    assert.equal(searchBackward(rep, 2, 5, ""), null);
+  });
+
+  it("returns null when pattern not found", () => {
+    assert.equal(searchBackward(rep, 2, 5, "xyz"), null);
+  });
+
+  it("searches multiple times with count", () => {
+    const pos = searchBackward(rep, 2, 5, "hello", 2);
+    assert.deepEqual(pos, [1, 4]);
+  });
+});
+
+describe("searchForward and searchBackward with count", () => {
+  const rep = makeRep(["aa", "aa", "aa", "aa"]);
+
+  it("searchForward finds nth occurrence", () => {
+    const pos = searchForward(rep, 0, 0, "aa", 3);
+    assert.deepEqual(pos, [2, 0]);
+  });
+
+  it("searchBackward finds nth occurrence backward", () => {
+    const pos = searchBackward(rep, 3, 2, "aa", 2);
+    assert.deepEqual(pos, [2, 0]);
   });
 });

@@ -20,6 +20,11 @@ const {
   getVisualSelection,
   paragraphTextRange,
   sentenceTextRange,
+  getFullText,
+  posToAbsolute,
+  absoluteToPos,
+  searchForward,
+  searchBackward,
 } = require("./vim-core");
 
 // --- State ---
@@ -38,6 +43,10 @@ let editorDoc = null;
 let currentRep = null;
 let desiredColumn = null;
 let lastCommand = null;
+let searchMode = false;
+let searchBuffer = "";
+let searchDirection = null;
+let lastSearch = null;
 
 // --- Editor operations ---
 
@@ -912,6 +921,36 @@ commands.normal["S"] = ({ editorInfo, line, lineText }) => {
   recordCommand("S", 1);
 };
 
+// --- Search ---
+
+commands.normal["/"] = () => {
+  searchMode = true;
+  searchBuffer = "";
+  searchDirection = "/";
+};
+
+commands.normal["?"] = () => {
+  searchMode = true;
+  searchBuffer = "";
+  searchDirection = "?";
+};
+
+commands.normal["n"] = (ctx) => {
+  if (!lastSearch) return;
+  const { pattern, direction } = lastSearch;
+  const searchFunc = direction === "/" ? searchForward : searchBackward;
+  const pos = searchFunc(ctx.rep, ctx.line, ctx.char + 1, pattern, ctx.count);
+  if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
+};
+
+commands.normal["N"] = (ctx) => {
+  if (!lastSearch) return;
+  const { pattern, direction } = lastSearch;
+  const searchFunc = direction === "/" ? searchBackward : searchForward;
+  const pos = searchFunc(ctx.rep, ctx.line, ctx.char, pattern, ctx.count);
+  if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
+};
+
 // --- Dispatch ---
 
 const handleKey = (key, ctx) => {
@@ -1055,6 +1094,32 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
   }
 
   if (mode === "insert") return false;
+
+  if (searchMode) {
+    if (evt.key === "Enter") {
+      searchMode = false;
+      const pattern = searchBuffer;
+      lastSearch = { pattern, direction: searchDirection };
+      const [curLine, curChar] = rep.selStart;
+      const searchFunc =
+        searchDirection === "/" ? searchForward : searchBackward;
+      const pos = searchFunc(rep, curLine, curChar + 1, pattern);
+      if (pos) moveBlockCursor(editorInfo, pos[0], pos[1]);
+      searchBuffer = "";
+      evt.preventDefault();
+      return true;
+    } else if (evt.key === "Escape") {
+      searchMode = false;
+      searchBuffer = "";
+      evt.preventDefault();
+      return true;
+    } else if (evt.key.length === 1 && !evt.ctrlKey && !evt.metaKey) {
+      searchBuffer += evt.key;
+      evt.preventDefault();
+      return true;
+    }
+    return false;
+  }
 
   const [line, char] =
     mode === "visual-line" || mode === "visual-char"
