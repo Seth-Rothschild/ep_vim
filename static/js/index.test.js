@@ -2,6 +2,14 @@
 
 const { describe, it, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
+
+// Mock navigator for clipboard operations
+global.navigator = {
+  clipboard: {
+    writeText: () => Promise.resolve(),
+  },
+};
+
 const {
   _state: state,
   _handleKey: handleKey,
@@ -865,5 +873,1068 @@ describe("line reference motions", () => {
     commands.normal["M"](ctx);
 
     assert.equal(calls.length, 1);
+  });
+});
+
+describe("delete operations", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("x deletes character at cursor", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["x"](ctx);
+
+    assert.equal(state.register, "e");
+  });
+
+  it("x with count deletes multiple characters", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+      count: 3,
+    };
+    commands.normal["x"](ctx);
+
+    assert.equal(state.register, "ell");
+  });
+
+  it("dd deletes entire line", () => {
+    const rep = makeRep(["line1", "line2", "line3"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "line2",
+      count: 1,
+    };
+    commands.normal["dd"](ctx);
+
+    assert.deepEqual(state.register, ["line2"]);
+  });
+
+  it("yy yanks entire line to register", () => {
+    const rep = makeRep(["line1", "line2", "line3"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "line2",
+      count: 1,
+    };
+    commands.normal["yy"](ctx);
+
+    assert.equal(state.register.length, 1);
+    assert.equal(state.register[0], "line2");
+  });
+
+  it("cc changes entire line (deletes and enters insert)", () => {
+    const rep = makeRep(["line1", "line2", "line3"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "line2",
+      count: 1,
+    };
+    commands.normal["cc"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("D deletes from cursor to end of line", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 6,
+      lineText: "hello world",
+    };
+    commands.normal["D"](ctx);
+
+    assert.equal(state.register, "world");
+  });
+
+  it("J joins lines", () => {
+    const rep = makeRep(["hello", "world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["J"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+});
+
+describe("insert mode commands", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("i enters insert mode at cursor", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["i"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("a enters insert mode after cursor", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["a"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("A enters insert mode at end of line", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["A"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("I enters insert mode at first non-blank", () => {
+    const rep = makeRep(["  hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "  hello" };
+    commands.normal["I"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("o opens line below", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello" };
+    commands.normal["o"](ctx);
+
+    assert.equal(state.mode, "insert");
+    assert.equal(calls.length, 2);
+  });
+
+  it("O opens line above", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello" };
+    commands.normal["O"](ctx);
+
+    assert.equal(state.mode, "insert");
+    assert.equal(calls.length, 2);
+  });
+
+  it("s replaces character and enters insert", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["s"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("S replaces entire line and enters insert", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["S"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("C changes to end of line and enters insert", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 6,
+      lineText: "hello world",
+    };
+    commands.normal["C"](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+});
+
+describe("replace command", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("r enters pending mode for replace", () => {
+    const ctx = { rep: makeRep([]), line: 0, char: 0, lineText: "" };
+    commands.normal["r"](ctx);
+
+    assert.equal(state.pendingKey, "r");
+  });
+
+  it("r replaces single character", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+      count: 1,
+    };
+    parameterized["r"]("x", ctx);
+
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0], {
+      type: "replace",
+      start: [0, 1],
+      end: [0, 2],
+      newText: "x",
+    });
+  });
+
+  it("r with count replaces multiple characters", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+      count: 3,
+    };
+    parameterized["r"]("x", ctx);
+
+    assert.equal(calls.length, 2);
+  });
+});
+
+describe("paste commands", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("p pastes string register after cursor", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.register = "x";
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["p"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+
+  it("p pastes with count repeats content", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.register = "a";
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 2,
+    };
+    commands.normal["p"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+
+  it("p pastes line register on new line", () => {
+    const rep = makeRep(["hello", "world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.register = ["inserted"];
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["p"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+
+  it("P pastes string register before cursor", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.register = "x";
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["P"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+
+  it("P pastes line register on new line above", () => {
+    const rep = makeRep(["hello", "world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.register = ["inserted"];
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "world",
+      count: 1,
+    };
+    commands.normal["P"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+});
+
+describe("case toggle", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("~ toggles case of character", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+    };
+    commands.normal["~"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+
+  it("~ with count toggles multiple characters", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 3,
+    };
+    commands.normal["~"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+});
+
+describe("undo command", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("u calls undo", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo: baseEditorInfo } = makeMockEditorInfo();
+
+    const editorInfo = {
+      ...baseEditorInfo,
+      ace_doUndoRedo: () => {},
+    };
+
+    const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello" };
+    commands.normal["u"](ctx);
+  });
+});
+
+describe("repeat command", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it(". repeats last command", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.lastCommand = { key: "h", count: 1, param: null };
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 3,
+      lineText: "hello",
+    };
+    commands.normal["."](ctx);
+
+    assert.equal(calls.length, 1);
+  });
+
+  it(". does nothing with no last command", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.lastCommand = null;
+
+    const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello" };
+    commands.normal["."](ctx);
+
+    assert.equal(calls.length, 0);
+  });
+
+  it(". repeats parameterized command", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.lastCommand = { key: "m", count: 1, param: "a" };
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "hello world",
+    };
+    commands.normal["."](ctx);
+
+    assert.deepEqual(state.marks["a"], [0, 2]);
+  });
+});
+
+describe("visual mode", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("v enters visual-char mode", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["v"](ctx);
+
+    assert.equal(state.mode, "visual-char");
+    assert.deepEqual(state.visualAnchor, [0, 2]);
+    assert.deepEqual(state.visualCursor, [0, 2]);
+  });
+
+  it("V enters visual-line mode", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = { rep, editorInfo, line: 0, char: 2, lineText: "hello" };
+    commands.normal["V"](ctx);
+
+    assert.equal(state.mode, "visual-line");
+    assert.deepEqual(state.visualAnchor, [0, 0]);
+    assert.deepEqual(state.visualCursor, [0, 0]);
+  });
+
+  it("d in visual-char deletes selection", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 0];
+    state.visualCursor = [0, 5];
+
+    const ctx = { rep, editorInfo, line: 0, char: 5, lineText: "hello world" };
+    commands["visual-char"]["d"](ctx);
+
+    assert.equal(state.mode, "normal");
+    assert.equal(state.register, "hello");
+  });
+
+  it("y in visual-line yanks lines", () => {
+    const rep = makeRep(["line1", "line2", "line3"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.mode = "visual-line";
+    state.visualAnchor = [0, 0];
+    state.visualCursor = [1, 0];
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "line2",
+    };
+    commands["visual-line"]["y"](ctx);
+
+    assert.equal(state.mode, "normal");
+    assert.equal(state.register.length, 2);
+  });
+
+  it("~ toggles case in visual-char", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 0];
+    state.visualCursor = [0, 5];
+
+    const ctx = { rep, editorInfo, line: 0, char: 5, lineText: "hello world" };
+    commands["visual-char"]["~"](ctx);
+
+    assert.equal(state.mode, "normal");
+  });
+});
+
+describe("search commands", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("/ enters search mode forward", () => {
+    commands.normal["/"](state);
+
+    assert.equal(state.searchMode, true);
+    assert.equal(state.searchDirection, "/");
+  });
+
+  it("? enters search mode backward", () => {
+    commands.normal["?"](state);
+
+    assert.equal(state.searchMode, true);
+    assert.equal(state.searchDirection, "?");
+  });
+
+  it("n searches next match", () => {
+    const rep = makeRep(["hello world hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.lastSearch = { pattern: "hello", direction: "/" };
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world hello",
+    };
+    commands.normal["n"](ctx);
+
+    assert.equal(calls.length, 1);
+  });
+
+  it("N searches previous match", () => {
+    const rep = makeRep(["hello world hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.lastSearch = { pattern: "hello", direction: "/" };
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 12,
+      lineText: "hello world hello",
+    };
+    commands.normal["N"](ctx);
+
+    assert.equal(calls.length, 1);
+  });
+
+  it("n does nothing with no last search", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    state.lastSearch = null;
+
+    const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello world" };
+    commands.normal["n"](ctx);
+
+    assert.equal(calls.length, 0);
+  });
+});
+
+describe("text objects", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("diw deletes inner word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+    };
+    commands.normal["diw"](ctx);
+  });
+
+  it("daw deletes a word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+    };
+    commands.normal["daw"](ctx);
+  });
+
+  it("yiw yanks inner word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+    };
+    commands.normal["yiw"](ctx);
+
+    assert.equal(typeof state.register, "string");
+  });
+
+  it("ci( changes inner parentheses", () => {
+    const rep = makeRep(["func(arg)"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 5,
+      lineText: "func(arg)",
+    };
+    commands.normal["ci("](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it("ca[ changes around brackets", () => {
+    const rep = makeRep(["array[1]"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 5,
+      lineText: "array[1]",
+    };
+    commands.normal["ca["](ctx);
+
+    assert.equal(state.mode, "insert");
+  });
+
+  it('di" deletes inner quotes', () => {
+    const rep = makeRep(['text "hello world" here']);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 7,
+      lineText: 'text "hello world" here',
+    };
+    commands.normal['di"'](ctx);
+  });
+});
+
+describe("miscellaneous commands", () => {
+  beforeEach(() => {
+    state.mode = "normal";
+    state.pendingKey = null;
+    state.pendingCount = null;
+    state.countBuffer = "";
+    state.register = null;
+    state.marks = {};
+    state.lastCharSearch = null;
+    state.visualAnchor = null;
+    state.visualCursor = null;
+    state.editorDoc = null;
+    state.currentRep = null;
+    state.desiredColumn = null;
+    state.lastCommand = null;
+    state.searchMode = false;
+    state.searchBuffer = "";
+    state.searchDirection = null;
+    state.lastSearch = null;
+  });
+
+  it("Y yanks line", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+    };
+    commands.normal["Y"](ctx);
+
+    assert.deepEqual(state.register, ["hello world"]);
+  });
+
+  it("operator with motion works (dh)", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 2,
+      lineText: "hello",
+    };
+    commands.normal["dh"](ctx);
+
+    assert.equal(typeof state.register, "string");
+    assert(state.register.length > 0);
+  });
+
+  it("yy with count yanks multiple lines", () => {
+    const rep = makeRep(["line1", "line2", "line3"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line1",
+      count: 2,
+    };
+    commands.normal["yy"](ctx);
+
+    assert.equal(state.register.length, 2);
+    assert.deepEqual(state.register, ["line1", "line2"]);
+  });
+
+  it("dd with count deletes multiple lines", () => {
+    const rep = makeRep(["line1", "line2", "line3", "line4"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "line1",
+      count: 2,
+    };
+    commands.normal["dd"](ctx);
+
+    assert.equal(state.register.length, 2);
+    assert.deepEqual(state.register, ["line1", "line2"]);
+  });
+
+  it("w motion moves to next word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+    };
+    commands.normal["w"](ctx);
+
+    // w should move to position 6 (start of "world")
+    assert(calls.length > 0, "w should generate a motion call");
+    const moveCall = calls[calls.length - 1];
+    assert.equal(moveCall.start[1], 6, "w should move to position 6");
+  });
+
+  it("dw deletes from cursor to start of next word", () => {
+    const rep = makeRep(["hello world more"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world more",
+    };
+    commands.normal["dw"](ctx);
+
+    // dw should generate replace call(s) for deletion
+    const replaceCalls = calls.filter((c) => c.type === "replace");
+    assert(replaceCalls.length > 0, "dw should perform deletion");
+  });
+
+  it("ye yanks to end of word", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+    };
+    commands.normal["ye"](ctx);
+
+    assert.equal(typeof state.register, "string");
+  });
+
+  it("cl changes one character", () => {
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 1,
+      lineText: "hello",
+    };
+    commands.normal["cl"](ctx);
+
+    assert.equal(state.mode, "insert");
   });
 });
