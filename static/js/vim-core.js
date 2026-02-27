@@ -13,6 +13,7 @@ const getLineText = (rep, line) => rep.lines.atIndex(line).text;
 
 const firstNonBlank = (lineText) => {
   let i = 0;
+  if (!lineText) return 0;
   while (i < lineText.length && isWhitespace(lineText[i])) i++;
   return i;
 };
