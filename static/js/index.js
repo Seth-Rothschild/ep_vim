@@ -1022,6 +1022,37 @@ commands.normal["N"] = (ctx) => {
   if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
 };
 
+const getWordAt = (text, char) => {
+  if (char >= text.length || !/\w/.test(text[char])) return null;
+  let start = char;
+  while (start > 0 && /\w/.test(text[start - 1])) start--;
+  let end = char;
+  while (end < text.length && /\w/.test(text[end])) end++;
+  return text.slice(start, end);
+};
+
+commands.normal["*"] = (ctx) => {
+  const word = getWordAt(ctx.lineText, ctx.char);
+  if (!word) return;
+  state.lastSearch = { pattern: word, direction: "/" };
+  const pos = searchForward(ctx.rep, ctx.line, ctx.char + 1, word, ctx.count);
+  if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
+};
+
+commands.normal["#"] = (ctx) => {
+  const word = getWordAt(ctx.lineText, ctx.char);
+  if (!word) return;
+  state.lastSearch = { pattern: word, direction: "?" };
+  const pos = searchBackward(ctx.rep, ctx.line, ctx.char, word, ctx.count);
+  if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
+};
+
+commands.normal["zz"] = ({ line }) => {
+  if (!state.editorDoc) return;
+  const lineDiv = state.editorDoc.body.querySelectorAll("div")[line];
+  if (lineDiv) lineDiv.scrollIntoView({ block: "center" });
+};
+
 // --- Dispatch ---
 
 const handleKey = (key, ctx) => {

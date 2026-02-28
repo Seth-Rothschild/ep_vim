@@ -10,7 +10,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 
 ## Features
 
-- **Modal editing** — normal, insert, and visual (char + line) modes
+- **Modal editing** — normal, insert, and visual (char + line) modes; visual selections support all operators (`d`, `c`, `y`)
 - **Motions** — `h` `j` `k` `l`, `w` `b` `e`, `0` `$` `^`, `gg` `G`, `f`/`F`/`t`/`T` char search, `{` `}` paragraph forward/backward, `H` `M` `L` viewport (top/middle/bottom)
 - **Char search** — `f`/`F`/`t`/`T` find, `;` repeat last search, `,` reverse direction
 - **Bracket matching** — `%` jump to matching bracket
@@ -19,7 +19,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Line operations** — `dd`, `cc`, `yy`, `J` (join), `Y` (yank line)
 - **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
-- **Editing** — `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
+- **Editing** — `i` `a` `A` `I` (insert/append), `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
 - **Search** — `/` and `?` forward/backward, `n`/`N` repeat
 - **Repeat** — `.` repeat last command
@@ -27,12 +27,18 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Undo** — `u`
 - **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage
 
+## Differences from vi
+
+- **Ctrl key mapping** — browser shortcuts conflict with common vim bindings (`Ctrl+d`, `Ctrl+u`, `Ctrl+r`, etc.); These will be implemented under a configurable setting.
+- **Clipboard toggle** — the default register writes to the system clipboard. We will add a setting to turn on the default vim behavior.
+- **No command line, macros, or globals** - these are not planned, but PRs welcome.
+
 ## Installation
 
-Clone or symlink into your Etherpad plugins directory, then install:
+From your Etherpad directory run
 
 ```
-pnpm install ep_vim
+pnpm run plugins install ep_vim
 ```
 
 

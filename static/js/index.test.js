@@ -3630,3 +3630,103 @@ describe("missing feature: named registers", () => {
     );
   });
 });
+
+describe("missing feature: * and # word search", () => {
+  beforeEach(resetState);
+
+  it("* searches forward for word under cursor", () => {
+    const rep = makeRep(["hello world hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    commands.normal["*"](ctx);
+
+    assert.equal(calls.length, 1, "should move cursor to next match");
+    assert.deepEqual(state.lastSearch, { pattern: "hello", direction: "/" });
+  });
+
+  it("* on non-word char does nothing", () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 5,
+      lineText: "hello world",
+      count: 1,
+      hasCount: false,
+    };
+
+    commands.normal["*"](ctx);
+
+    assert.equal(calls.length, 0, "should not move cursor");
+    assert.equal(state.lastSearch, null);
+  });
+
+  it("# searches backward for word under cursor", () => {
+    const rep = makeRep(["hello world hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 12,
+      lineText: "hello world hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    commands.normal["#"](ctx);
+
+    assert.equal(calls.length, 1, "should move cursor to previous match");
+    assert.deepEqual(state.lastSearch, { pattern: "hello", direction: "?" });
+  });
+
+  it("* sets lastSearch so n repeats the search", () => {
+    const rep = makeRep(["foo bar foo bar"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "foo bar foo bar",
+      count: 1,
+      hasCount: false,
+    };
+
+    commands.normal["*"](ctx);
+
+    assert.deepEqual(state.lastSearch, { pattern: "foo", direction: "/" });
+  });
+});
+
+describe("missing feature: zz center screen", () => {
+  beforeEach(resetState);
+
+  it("zz does nothing when editorDoc is null", () => {
+    state.editorDoc = null;
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    assert.doesNotThrow(() => commands.normal["zz"](ctx));
+  });
+});
