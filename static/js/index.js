@@ -30,6 +30,9 @@ let vimEnabled =
   typeof localStorage !== "undefined" &&
   localStorage.getItem("ep_vimEnabled") === "true";
 
+let useSystemClipboard = true;
+let useCtrlKeys = true;
+
 const state = {
   mode: "normal",
   pendingKey: null,
@@ -66,7 +69,7 @@ const setRegister = (value) => {
   }
   state.register = value;
   const text = Array.isArray(value) ? value.join("\n") + "\n" : value;
-  if (navigator.clipboard) {
+  if (useSystemClipboard && navigator.clipboard) {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 };
@@ -1162,6 +1165,22 @@ exports.postToolbarInit = (_hookName, _args) => {
     localStorage.setItem("ep_vimEnabled", vimEnabled ? "true" : "false");
     btn.classList.toggle("vim-enabled", vimEnabled);
   });
+
+  const clipboardCheckbox = document.getElementById(
+    "options-vim-use-system-clipboard",
+  );
+  if (!clipboardCheckbox) return;
+  useSystemClipboard = clipboardCheckbox.checked;
+  clipboardCheckbox.addEventListener("change", () => {
+    useSystemClipboard = clipboardCheckbox.checked;
+  });
+
+  const ctrlKeysCheckbox = document.getElementById("options-vim-use-ctrl-keys");
+  if (!ctrlKeysCheckbox) return;
+  useCtrlKeys = ctrlKeysCheckbox.checked;
+  ctrlKeysCheckbox.addEventListener("change", () => {
+    useCtrlKeys = ctrlKeysCheckbox.checked;
+  });
 };
 
 exports.postAceInit = (_hookName, { ace }) => {
@@ -1181,7 +1200,10 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
 
   const isBrowserShortcut =
     (evt.ctrlKey || evt.metaKey) &&
-    (evt.key === "x" || evt.key === "c" || evt.key === "v" || evt.key === "r");
+    (evt.key === "x" ||
+      evt.key === "c" ||
+      evt.key === "v" ||
+      (evt.key === "r" && !useCtrlKeys));
   if (isBrowserShortcut) return false;
 
   state.currentRep = rep;
@@ -1247,6 +1269,51 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
       : rep.selStart;
   const lineText = rep.lines.atIndex(line).text;
   const ctx = { rep, editorInfo, line, char, lineText };
+
+  if (useCtrlKeys && evt.ctrlKey && state.mode === "normal") {
+    if (state.countBuffer !== "") {
+      state.pendingCount = parseInt(state.countBuffer, 10);
+      state.countBuffer = "";
+    }
+    const count = state.pendingCount !== null ? state.pendingCount : 1;
+
+    if (evt.key === "r") {
+      editorInfo.ace_doUndoRedo("redo");
+      state.pendingCount = null;
+      state.pendingRegister = null;
+      evt.preventDefault();
+      return true;
+    }
+
+    const halfPage = 15;
+    if (evt.key === "d") {
+      const target = Math.min(line + halfPage * count, rep.lines.length() - 1);
+      const targetLen = rep.lines.atIndex(target).text.length;
+      moveBlockCursor(
+        editorInfo,
+        target,
+        Math.min(char, Math.max(0, targetLen - 1)),
+      );
+      state.pendingCount = null;
+      state.pendingRegister = null;
+      evt.preventDefault();
+      return true;
+    }
+    if (evt.key === "u") {
+      const target = Math.max(line - halfPage * count, 0);
+      const targetLen = rep.lines.atIndex(target).text.length;
+      moveBlockCursor(
+        editorInfo,
+        target,
+        Math.min(char, Math.max(0, targetLen - 1)),
+      );
+      state.pendingCount = null;
+      state.pendingRegister = null;
+      evt.preventDefault();
+      return true;
+    }
+  }
+
   const handled = handleKey(evt.key, ctx);
   if (handled) evt.preventDefault();
   return handled;

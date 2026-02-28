@@ -29,8 +29,6 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 
 ## Differences from vi
 
-- **Ctrl key mapping** — browser shortcuts conflict with common vim bindings (`Ctrl+d`, `Ctrl+u`, `Ctrl+r`, etc.); These will be implemented under a configurable setting.
-- **Clipboard toggle** — the default register writes to the system clipboard. We will add a setting to turn on the default vim behavior.
 - **No command line, macros, or globals** - these are not planned, but PRs welcome.
 
 ## Installation

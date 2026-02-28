@@ -9,7 +9,8 @@
         "postToolbarInit": "ep_vim/static/js/index"
       },
       "hooks": {
-        "eejsBlock_editbarMenuLeft": "ep_vim/index"
+        "eejsBlock_editbarMenuLeft": "ep_vim/index",
+        "eejsBlock_mySettings": "ep_vim/index"
       }
     }
   ]
