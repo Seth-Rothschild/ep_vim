@@ -15,6 +15,9 @@ const {
   _handleKey: handleKey,
   _commands: commands,
   _parameterized: parameterized,
+  _setVimEnabled: setVimEnabled,
+  _setUseCtrlKeys: setUseCtrlKeys,
+  aceKeyEvent,
 } = require("./index.js");
 
 const makeRep = (lines) => ({
@@ -2022,6 +2025,7 @@ const resetState = () => {
   state.searchBuffer = "";
   state.searchDirection = null;
   state.lastSearch = null;
+  state.lastVisualSelection = null;
 };
 
 describe("edge cases: cc with count", () => {
@@ -3728,5 +3732,292 @@ describe("missing feature: zz center screen", () => {
     };
 
     assert.doesNotThrow(() => commands.normal["zz"](ctx));
+  });
+});
+
+describe("zt and zb scroll commands", () => {
+  beforeEach(resetState);
+
+  it("zt does nothing when editorDoc is null", () => {
+    state.editorDoc = null;
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+    assert.doesNotThrow(() => commands.normal["zt"](ctx));
+  });
+
+  it("zb does nothing when editorDoc is null", () => {
+    state.editorDoc = null;
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+    assert.doesNotThrow(() => commands.normal["zb"](ctx));
+  });
+
+  it("zt calls scrollIntoView with block: start", () => {
+    const scrollCalls = [];
+    const mockLineDiv = {
+      scrollIntoView: (opts) => scrollCalls.push(opts),
+    };
+    state.editorDoc = {
+      body: {
+        querySelectorAll: () => [mockLineDiv],
+      },
+    };
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["zt"](ctx);
+    assert.equal(scrollCalls.length, 1);
+    assert.deepEqual(scrollCalls[0], { block: "start" });
+  });
+
+  it("zb calls scrollIntoView with block: end", () => {
+    const scrollCalls = [];
+    const mockLineDiv = {
+      scrollIntoView: (opts) => scrollCalls.push(opts),
+    };
+    state.editorDoc = {
+      body: {
+        querySelectorAll: () => [mockLineDiv],
+      },
+    };
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["zb"](ctx);
+    assert.equal(scrollCalls.length, 1);
+    assert.deepEqual(scrollCalls[0], { block: "end" });
+  });
+});
+
+describe("gv reselect last visual", () => {
+  beforeEach(resetState);
+
+  it("does nothing when lastVisualSelection is null", () => {
+    state.lastVisualSelection = null;
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["gv"](ctx);
+    assert.equal(calls.length, 0);
+    assert.equal(state.mode, "normal");
+  });
+
+  it("restores visual-char selection", () => {
+    state.lastVisualSelection = {
+      anchor: [0, 2],
+      cursor: [0, 5],
+      mode: "visual-char",
+    };
+    const rep = makeRep(["hello world"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["gv"](ctx);
+    assert.equal(state.mode, "visual-char");
+    assert.deepEqual(state.visualAnchor, [0, 2]);
+    assert.deepEqual(state.visualCursor, [0, 5]);
+    assert.ok(calls.length > 0, "expected a selection call");
+  });
+
+  it("restores visual-line selection", () => {
+    state.lastVisualSelection = {
+      anchor: [1, 0],
+      cursor: [2, 0],
+      mode: "visual-line",
+    };
+    const rep = makeRep(["aaa", "bbb", "ccc"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "aaa",
+      count: 1,
+      hasCount: false,
+    };
+    commands.normal["gv"](ctx);
+    assert.equal(state.mode, "visual-line");
+    assert.deepEqual(state.visualAnchor, [1, 0]);
+    assert.deepEqual(state.visualCursor, [2, 0]);
+  });
+
+  it("escape from visual-char saves lastVisualSelection", () => {
+    state.mode = "visual-char";
+    state.visualAnchor = [0, 1];
+    state.visualCursor = [0, 4];
+    state.editorDoc = null;
+    const rep = makeRep(["hello world"]);
+    rep.selStart = [0, 4];
+    const { editorInfo } = makeMockEditorInfo();
+    const mockEvt = {
+      type: "keydown",
+      key: "Escape",
+      ctrlKey: false,
+      metaKey: false,
+      target: { ownerDocument: null },
+      preventDefault: () => {},
+    };
+    setVimEnabled(true);
+    aceKeyEvent("aceKeyEvent", { evt: mockEvt, rep, editorInfo });
+    setVimEnabled(false);
+    assert.deepEqual(state.lastVisualSelection, {
+      anchor: [0, 1],
+      cursor: [0, 4],
+      mode: "visual-char",
+    });
+  });
+
+  it("escape from visual-line saves lastVisualSelection", () => {
+    state.mode = "visual-line";
+    state.visualAnchor = [0, 0];
+    state.visualCursor = [2, 0];
+    state.editorDoc = null;
+    const rep = makeRep(["aaa", "bbb", "ccc"]);
+    rep.selStart = [2, 0];
+    const { editorInfo } = makeMockEditorInfo();
+    const mockEvt = {
+      type: "keydown",
+      key: "Escape",
+      ctrlKey: false,
+      metaKey: false,
+      target: { ownerDocument: null },
+      preventDefault: () => {},
+    };
+    setVimEnabled(true);
+    aceKeyEvent("aceKeyEvent", { evt: mockEvt, rep, editorInfo });
+    setVimEnabled(false);
+    assert.deepEqual(state.lastVisualSelection, {
+      anchor: [0, 0],
+      cursor: [2, 0],
+      mode: "visual-line",
+    });
+  });
+});
+
+describe("Ctrl+f and Ctrl+b page scroll", () => {
+  beforeEach(() => {
+    resetState();
+    setVimEnabled(true);
+    setUseCtrlKeys(true);
+  });
+
+  const makeCtrlEvt = (key) => ({
+    type: "keydown",
+    key,
+    ctrlKey: true,
+    metaKey: false,
+    target: { ownerDocument: null },
+    preventDefault: () => {},
+  });
+
+  it("Ctrl+f moves forward one full page", () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line${i}`);
+    const rep = makeRep(lines);
+    rep.selStart = [0, 0];
+    const { editorInfo, calls } = makeMockEditorInfo();
+    aceKeyEvent("aceKeyEvent", {
+      evt: makeCtrlEvt("f"),
+      rep,
+      editorInfo,
+    });
+    const selectCall = calls.find((c) => c.type === "select");
+    assert.ok(selectCall, "expected a select call");
+    assert.equal(selectCall.start[0], 30);
+  });
+
+  it("Ctrl+b moves backward one full page", () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line${i}`);
+    const rep = makeRep(lines);
+    rep.selStart = [40, 0];
+    state.mode = "normal";
+    const { editorInfo, calls } = makeMockEditorInfo();
+    aceKeyEvent("aceKeyEvent", {
+      evt: makeCtrlEvt("b"),
+      rep,
+      editorInfo,
+    });
+    const selectCall = calls.find((c) => c.type === "select");
+    assert.ok(selectCall, "expected a select call");
+    assert.equal(selectCall.start[0], 10);
+  });
+
+  it("Ctrl+f clamps at end of document", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `line${i}`);
+    const rep = makeRep(lines);
+    rep.selStart = [5, 0];
+    const { editorInfo, calls } = makeMockEditorInfo();
+    aceKeyEvent("aceKeyEvent", {
+      evt: makeCtrlEvt("f"),
+      rep,
+      editorInfo,
+    });
+    const selectCall = calls.find((c) => c.type === "select");
+    assert.ok(selectCall, "expected a select call");
+    assert.equal(selectCall.start[0], 9);
+  });
+
+  it("Ctrl+b clamps at start of document", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `line${i}`);
+    const rep = makeRep(lines);
+    rep.selStart = [3, 0];
+    const { editorInfo, calls } = makeMockEditorInfo();
+    aceKeyEvent("aceKeyEvent", {
+      evt: makeCtrlEvt("b"),
+      rep,
+      editorInfo,
+    });
+    const selectCall = calls.find((c) => c.type === "select");
+    assert.ok(selectCall, "expected a select call");
+    assert.equal(selectCall.start[0], 0);
   });
 });

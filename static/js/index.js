@@ -54,6 +54,7 @@ const state = {
   searchBuffer: "",
   searchDirection: null,
   lastSearch: null,
+  lastVisualSelection: null,
 };
 
 // --- Editor operations ---
@@ -767,6 +768,15 @@ commands["visual-line"]["~"] = (ctx) => {
   moveBlockCursor(ctx.editorInfo, start[0], start[1]);
 };
 
+commands.normal["gv"] = ({ editorInfo, rep }) => {
+  if (!state.lastVisualSelection) return;
+  const { anchor, cursor, mode } = state.lastVisualSelection;
+  state.visualAnchor = anchor;
+  state.visualCursor = cursor;
+  state.mode = mode;
+  updateVisualSelection(editorInfo, rep);
+};
+
 // --- Miscellaneous ---
 
 commands.normal["u"] = ({ editorInfo }) => {
@@ -1056,6 +1066,18 @@ commands.normal["zz"] = ({ line }) => {
   if (lineDiv) lineDiv.scrollIntoView({ block: "center" });
 };
 
+commands.normal["zt"] = ({ line }) => {
+  if (!state.editorDoc) return;
+  const lineDiv = state.editorDoc.body.querySelectorAll("div")[line];
+  if (lineDiv) lineDiv.scrollIntoView({ block: "start" });
+};
+
+commands.normal["zb"] = ({ line }) => {
+  if (!state.editorDoc) return;
+  const lineDiv = state.editorDoc.body.querySelectorAll("div")[line];
+  if (lineDiv) lineDiv.scrollIntoView({ block: "end" });
+};
+
 // --- Dispatch ---
 
 const handleKey = (key, ctx) => {
@@ -1212,10 +1234,20 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
   if (evt.key === "Escape") {
     state.desiredColumn = null;
     if (state.mode === "visual-line") {
+      state.lastVisualSelection = {
+        anchor: state.visualAnchor,
+        cursor: state.visualCursor,
+        mode: "visual-line",
+      };
       const line = Math.min(state.visualAnchor[0], state.visualCursor[0]);
       state.mode = "normal";
       moveBlockCursor(editorInfo, line, 0);
     } else if (state.mode === "visual-char") {
+      state.lastVisualSelection = {
+        anchor: state.visualAnchor,
+        cursor: state.visualCursor,
+        mode: "visual-char",
+      };
       const [vLine, vChar] = state.visualCursor;
       state.mode = "normal";
       moveBlockCursor(editorInfo, vLine, vChar);
@@ -1312,6 +1344,33 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
       evt.preventDefault();
       return true;
     }
+    const fullPage = halfPage * 2;
+    if (evt.key === "f") {
+      const target = Math.min(line + fullPage * count, rep.lines.length() - 1);
+      const targetLen = rep.lines.atIndex(target).text.length;
+      moveBlockCursor(
+        editorInfo,
+        target,
+        Math.min(char, Math.max(0, targetLen - 1)),
+      );
+      state.pendingCount = null;
+      state.pendingRegister = null;
+      evt.preventDefault();
+      return true;
+    }
+    if (evt.key === "b") {
+      const target = Math.max(line - fullPage * count, 0);
+      const targetLen = rep.lines.atIndex(target).text.length;
+      moveBlockCursor(
+        editorInfo,
+        target,
+        Math.min(char, Math.max(0, targetLen - 1)),
+      );
+      state.pendingCount = null;
+      state.pendingRegister = null;
+      evt.preventDefault();
+      return true;
+    }
   }
 
   const handled = handleKey(evt.key, ctx);
@@ -1324,3 +1383,9 @@ exports._state = state;
 exports._handleKey = handleKey;
 exports._commands = commands;
 exports._parameterized = parameterized;
+exports._setVimEnabled = (v) => {
+  vimEnabled = v;
+};
+exports._setUseCtrlKeys = (v) => {
+  useCtrlKeys = v;
+};

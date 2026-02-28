@@ -16,16 +16,18 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Bracket matching** — `%` jump to matching bracket
 - **Text objects** — `iw`/`aw` (word), `i"`/`a"` and `i'`/`a'` (quotes), `i{`/`a{` etc. (brackets), `ip`/`ap` (paragraph), `is`/`as` (sentence)
 - **Operators** — `d`, `c`, `y` with motion and text object combinations (`dw`, `ce`, `y$`, `ciw`, `da"`, `yi(`, etc.)
-- **Line operations** — `dd`, `cc`, `yy`, `J` (join), `Y` (yank line)
+- **Line operations** — `dd`, `cc`, `yy`, `D`, `J` (join), `Y` (yank line)
 - **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
 - **Editing** — `i` `a` `A` `I` (insert/append), `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
-- **Search** — `/` and `?` forward/backward, `n`/`N` repeat
+- **Search** — `/` and `?` forward/backward, `n`/`N` repeat, `*`/`#` search word under cursor
+- **Scrolling** — `zz`/`zt`/`zb` center/top/bottom, `Ctrl+d`/`Ctrl+u` half-page, `Ctrl+f`/`Ctrl+b` full-page (requires ctrl keys enabled)
+- **Visual** — `v` char, `V` line, `gv` reselect last selection; `~` toggle case in visual
 - **Repeat** — `.` repeat last command
 - **Counts** — numeric prefixes work with motions and operators
-- **Undo** — `u`
-- **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage
+- **Undo/redo** — `u` undo, `Ctrl+r` redo (requires ctrl keys enabled)
+- **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage; settings panel for system clipboard and ctrl key behavior
 
 ## Differences from vi
 
