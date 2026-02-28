@@ -540,6 +540,8 @@ registerMotion("L", (ctx) => {
   };
 });
 
+// --- Char search motions ---
+
 registerParamMotion("f", (key, ctx) => {
   const pos = charSearchPos("f", ctx.lineText, ctx.char, key, ctx.count);
   return pos !== -1 ? pos : null;
@@ -768,6 +770,22 @@ commands["visual-line"]["~"] = (ctx) => {
   moveBlockCursor(ctx.editorInfo, start[0], start[1]);
 };
 
+commands["visual-char"]["i"] = () => {
+  state.pendingKey = "i";
+};
+
+commands["visual-char"]["a"] = () => {
+  state.pendingKey = "a";
+};
+
+commands["visual-line"]["i"] = () => {
+  state.pendingKey = "i";
+};
+
+commands["visual-line"]["a"] = () => {
+  state.pendingKey = "a";
+};
+
 commands.normal["gv"] = ({ editorInfo, rep }) => {
   if (!state.lastVisualSelection) return;
   const { anchor, cursor, mode } = state.lastVisualSelection;
@@ -777,24 +795,7 @@ commands.normal["gv"] = ({ editorInfo, rep }) => {
   updateVisualSelection(editorInfo, rep);
 };
 
-// --- Miscellaneous ---
-
-commands.normal["u"] = ({ editorInfo }) => {
-  editorInfo.ace_doUndoRedo("undo");
-};
-
-commands.normal["."] = (ctx) => {
-  if (!state.lastCommand) return;
-  const { key, count, param } = state.lastCommand;
-  if (param !== null && parameterized[key]) {
-    parameterized[key](param, ctx);
-  } else if (commands[state.mode] && commands[state.mode][key]) {
-    const newCtx = { ...ctx, count };
-    commands[state.mode][key](newCtx);
-  }
-};
-
-// --- Mode transitions ---
+// --- Insert mode entry ---
 
 commands.normal["i"] = ({ editorInfo, line, char }) => {
   clearEmptyLineCursor();
@@ -820,22 +821,6 @@ commands.normal["I"] = ({ editorInfo, line, lineText }) => {
   state.mode = "insert";
 };
 
-commands["visual-char"]["i"] = () => {
-  state.pendingKey = "i";
-};
-
-commands["visual-char"]["a"] = () => {
-  state.pendingKey = "a";
-};
-
-commands["visual-line"]["i"] = () => {
-  state.pendingKey = "i";
-};
-
-commands["visual-line"]["a"] = () => {
-  state.pendingKey = "a";
-};
-
 commands.normal["o"] = ({ editorInfo, line, lineText }) => {
   clearEmptyLineCursor();
   replaceRange(
@@ -855,7 +840,7 @@ commands.normal["O"] = ({ editorInfo, line }) => {
   state.mode = "insert";
 };
 
-// --- More normal mode commands ---
+// --- Editing commands ---
 
 commands.normal["r"] = () => {
   state.pendingKey = "r";
@@ -1005,6 +990,27 @@ commands.normal["S"] = ({ editorInfo, line, lineText }) => {
   recordCommand("S", 1);
 };
 
+// --- Undo, redo, repeat ---
+
+commands.normal["u"] = ({ editorInfo }) => {
+  editorInfo.ace_doUndoRedo("undo");
+};
+
+commands.normal["<C-r>"] = ({ editorInfo }) => {
+  editorInfo.ace_doUndoRedo("redo");
+};
+
+commands.normal["."] = (ctx) => {
+  if (!state.lastCommand) return;
+  const { key, count, param } = state.lastCommand;
+  if (param !== null && parameterized[key]) {
+    parameterized[key](param, ctx);
+  } else if (commands[state.mode] && commands[state.mode][key]) {
+    const newCtx = { ...ctx, count };
+    commands[state.mode][key](newCtx);
+  }
+};
+
 // --- Search ---
 
 commands.normal["/"] = () => {
@@ -1060,6 +1066,8 @@ commands.normal["#"] = (ctx) => {
   if (pos) moveBlockCursor(ctx.editorInfo, pos[0], pos[1]);
 };
 
+// --- Scroll ---
+
 commands.normal["zz"] = ({ line }) => {
   if (!state.editorDoc) return;
   const lineDiv = state.editorDoc.body.querySelectorAll("div")[line];
@@ -1076,6 +1084,49 @@ commands.normal["zb"] = ({ line }) => {
   if (!state.editorDoc) return;
   const lineDiv = state.editorDoc.body.querySelectorAll("div")[line];
   if (lineDiv) lineDiv.scrollIntoView({ block: "end" });
+};
+
+const halfPage = 15;
+const fullPage = halfPage * 2;
+
+commands.normal["<C-d>"] = ({ editorInfo, rep, line, char, count }) => {
+  const target = Math.min(line + halfPage * count, rep.lines.length() - 1);
+  const targetLen = rep.lines.atIndex(target).text.length;
+  moveBlockCursor(
+    editorInfo,
+    target,
+    Math.min(char, Math.max(0, targetLen - 1)),
+  );
+};
+
+commands.normal["<C-u>"] = ({ editorInfo, rep, line, char, count }) => {
+  const target = Math.max(line - halfPage * count, 0);
+  const targetLen = rep.lines.atIndex(target).text.length;
+  moveBlockCursor(
+    editorInfo,
+    target,
+    Math.min(char, Math.max(0, targetLen - 1)),
+  );
+};
+
+commands.normal["<C-f>"] = ({ editorInfo, rep, line, char, count }) => {
+  const target = Math.min(line + fullPage * count, rep.lines.length() - 1);
+  const targetLen = rep.lines.atIndex(target).text.length;
+  moveBlockCursor(
+    editorInfo,
+    target,
+    Math.min(char, Math.max(0, targetLen - 1)),
+  );
+};
+
+commands.normal["<C-b>"] = ({ editorInfo, rep, line, char, count }) => {
+  const target = Math.max(line - fullPage * count, 0);
+  const targetLen = rep.lines.atIndex(target).text.length;
+  moveBlockCursor(
+    editorInfo,
+    target,
+    Math.min(char, Math.max(0, targetLen - 1)),
+  );
 };
 
 // --- Dispatch ---
@@ -1303,71 +1354,9 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
   const ctx = { rep, editorInfo, line, char, lineText };
 
   if (useCtrlKeys && evt.ctrlKey && state.mode === "normal") {
-    if (state.countBuffer !== "") {
-      state.pendingCount = parseInt(state.countBuffer, 10);
-      state.countBuffer = "";
-    }
-    const count = state.pendingCount !== null ? state.pendingCount : 1;
-
-    if (evt.key === "r") {
-      editorInfo.ace_doUndoRedo("redo");
-      state.pendingCount = null;
-      state.pendingRegister = null;
-      evt.preventDefault();
-      return true;
-    }
-
-    const halfPage = 15;
-    if (evt.key === "d") {
-      const target = Math.min(line + halfPage * count, rep.lines.length() - 1);
-      const targetLen = rep.lines.atIndex(target).text.length;
-      moveBlockCursor(
-        editorInfo,
-        target,
-        Math.min(char, Math.max(0, targetLen - 1)),
-      );
-      state.pendingCount = null;
-      state.pendingRegister = null;
-      evt.preventDefault();
-      return true;
-    }
-    if (evt.key === "u") {
-      const target = Math.max(line - halfPage * count, 0);
-      const targetLen = rep.lines.atIndex(target).text.length;
-      moveBlockCursor(
-        editorInfo,
-        target,
-        Math.min(char, Math.max(0, targetLen - 1)),
-      );
-      state.pendingCount = null;
-      state.pendingRegister = null;
-      evt.preventDefault();
-      return true;
-    }
-    const fullPage = halfPage * 2;
-    if (evt.key === "f") {
-      const target = Math.min(line + fullPage * count, rep.lines.length() - 1);
-      const targetLen = rep.lines.atIndex(target).text.length;
-      moveBlockCursor(
-        editorInfo,
-        target,
-        Math.min(char, Math.max(0, targetLen - 1)),
-      );
-      state.pendingCount = null;
-      state.pendingRegister = null;
-      evt.preventDefault();
-      return true;
-    }
-    if (evt.key === "b") {
-      const target = Math.max(line - fullPage * count, 0);
-      const targetLen = rep.lines.atIndex(target).text.length;
-      moveBlockCursor(
-        editorInfo,
-        target,
-        Math.min(char, Math.max(0, targetLen - 1)),
-      );
-      state.pendingCount = null;
-      state.pendingRegister = null;
+    const ctrlKey = "<C-" + evt.key + ">";
+    if (commands.normal[ctrlKey]) {
+      handleKey(ctrlKey, ctx);
       evt.preventDefault();
       return true;
     }
