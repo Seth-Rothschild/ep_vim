@@ -833,6 +833,7 @@ parameterized["r"] = (key, { editorInfo, line, char, lineText, count }) => {
 
 commands.normal["Y"] = ({ rep, line }) => {
   setRegister([getLineText(rep, line)]);
+  recordCommand("Y", 1);
 };
 
 commands.normal["x"] = ({ editorInfo, rep, line, char, lineText, count }) => {
@@ -852,7 +853,7 @@ commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
       const insertPos = Math.min(char + 1, lineText.length);
       const repeated = state.register.repeat(count);
       replaceRange(editorInfo, [line, insertPos], [line, insertPos], repeated);
-      moveBlockCursor(editorInfo, line, insertPos);
+      moveBlockCursor(editorInfo, line, insertPos + repeated.length - 1);
     } else {
       const block = state.register.join("\n");
       const parts = [];
@@ -864,7 +865,7 @@ commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
         [line, lineText.length],
         insertText,
       );
-      moveBlockCursor(editorInfo, line + 1, 0);
+      moveBlockCursor(editorInfo, line + 1, firstNonBlank(state.register[0]));
     }
     recordCommand("p", count);
   }
@@ -875,14 +876,14 @@ commands.normal["P"] = ({ editorInfo, line, char, count }) => {
     if (typeof state.register === "string") {
       const repeated = state.register.repeat(count);
       replaceRange(editorInfo, [line, char], [line, char], repeated);
-      moveBlockCursor(editorInfo, line, char);
+      moveBlockCursor(editorInfo, line, char + repeated.length - 1);
     } else {
       const block = state.register.join("\n");
       const parts = [];
       for (let i = 0; i < count; i++) parts.push(block);
       const insertText = parts.join("\n") + "\n";
       replaceRange(editorInfo, [line, 0], [line, 0], insertText);
-      moveBlockCursor(editorInfo, line, 0);
+      moveBlockCursor(editorInfo, line, firstNonBlank(state.register[0]));
     }
     recordCommand("P", count);
   }
@@ -944,7 +945,7 @@ commands.normal["C"] = ({ editorInfo, line, char, lineText }) => {
 
 commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
   clearEmptyLineCursor();
-  setRegister(lineText.slice(char, char + 1));
+  setRegister(lineText.slice(char, Math.min(char + count, lineText.length)));
   replaceRange(
     editorInfo,
     [line, char],
@@ -958,7 +959,7 @@ commands.normal["s"] = ({ editorInfo, rep, line, char, lineText, count }) => {
 
 commands.normal["S"] = ({ editorInfo, line, lineText }) => {
   clearEmptyLineCursor();
-  setRegister(lineText);
+  setRegister([lineText]);
   replaceRange(editorInfo, [line, 0], [line, lineText.length], "");
   moveCursor(editorInfo, line, 0);
   state.mode = "insert";
