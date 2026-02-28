@@ -36,6 +36,9 @@ const state = {
   pendingCount: null,
   countBuffer: "",
   register: null,
+  namedRegisters: {},
+  pendingRegister: null,
+  awaitingRegister: false,
   marks: {},
   lastCharSearch: null,
   visualAnchor: null,
@@ -53,11 +56,32 @@ const state = {
 // --- Editor operations ---
 
 const setRegister = (value) => {
+  if (state.pendingRegister === "_") {
+    return;
+  }
+  if (state.pendingRegister && /^[a-zA-Z]$/.test(state.pendingRegister)) {
+    const name = state.pendingRegister.toLowerCase();
+    state.namedRegisters[name] = value;
+    return;
+  }
   state.register = value;
   const text = Array.isArray(value) ? value.join("\n") + "\n" : value;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(text).catch(() => {});
   }
+};
+
+const getActiveRegister = () => {
+  if (state.pendingRegister === "_") {
+    return null;
+  }
+  if (state.pendingRegister && /^[a-zA-Z]$/.test(state.pendingRegister)) {
+    const name = state.pendingRegister.toLowerCase();
+    return state.namedRegisters[name] !== undefined
+      ? state.namedRegisters[name]
+      : null;
+  }
+  return state.register;
 };
 
 const moveCursor = (editorInfo, line, char) => {
@@ -848,14 +872,15 @@ commands.normal["x"] = ({ editorInfo, rep, line, char, lineText, count }) => {
 };
 
 commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
-  if (state.register !== null) {
-    if (typeof state.register === "string") {
+  const reg = getActiveRegister();
+  if (reg !== null) {
+    if (typeof reg === "string") {
       const insertPos = Math.min(char + 1, lineText.length);
-      const repeated = state.register.repeat(count);
+      const repeated = reg.repeat(count);
       replaceRange(editorInfo, [line, insertPos], [line, insertPos], repeated);
       moveBlockCursor(editorInfo, line, insertPos + repeated.length - 1);
     } else {
-      const block = state.register.join("\n");
+      const block = reg.join("\n");
       const parts = [];
       for (let i = 0; i < count; i++) parts.push(block);
       const insertText = "\n" + parts.join("\n");
@@ -865,25 +890,26 @@ commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
         [line, lineText.length],
         insertText,
       );
-      moveBlockCursor(editorInfo, line + 1, firstNonBlank(state.register[0]));
+      moveBlockCursor(editorInfo, line + 1, firstNonBlank(reg[0]));
     }
     recordCommand("p", count);
   }
 };
 
 commands.normal["P"] = ({ editorInfo, line, char, count }) => {
-  if (state.register !== null) {
-    if (typeof state.register === "string") {
-      const repeated = state.register.repeat(count);
+  const reg = getActiveRegister();
+  if (reg !== null) {
+    if (typeof reg === "string") {
+      const repeated = reg.repeat(count);
       replaceRange(editorInfo, [line, char], [line, char], repeated);
       moveBlockCursor(editorInfo, line, char + repeated.length - 1);
     } else {
-      const block = state.register.join("\n");
+      const block = reg.join("\n");
       const parts = [];
       for (let i = 0; i < count; i++) parts.push(block);
       const insertText = parts.join("\n") + "\n";
       replaceRange(editorInfo, [line, 0], [line, 0], insertText);
-      moveBlockCursor(editorInfo, line, firstNonBlank(state.register[0]));
+      moveBlockCursor(editorInfo, line, firstNonBlank(reg[0]));
     }
     recordCommand("P", count);
   }
@@ -999,6 +1025,16 @@ commands.normal["N"] = (ctx) => {
 // --- Dispatch ---
 
 const handleKey = (key, ctx) => {
+  if (state.awaitingRegister) {
+    state.pendingRegister = key;
+    state.awaitingRegister = false;
+    return true;
+  }
+  if (key === '"' && state.mode === "normal") {
+    state.awaitingRegister = true;
+    return true;
+  }
+
   if (key >= "1" && key <= "9") {
     state.countBuffer += key;
     return true;
@@ -1020,6 +1056,7 @@ const handleKey = (key, ctx) => {
     state.pendingKey = null;
     handler(key, ctx);
     state.pendingCount = null;
+    state.pendingRegister = null;
     return true;
   }
 
@@ -1029,7 +1066,10 @@ const handleKey = (key, ctx) => {
   if (map[seq]) {
     state.pendingKey = null;
     map[seq](ctx);
-    if (state.pendingKey === null) state.pendingCount = null;
+    if (state.pendingKey === null) {
+      state.pendingCount = null;
+      state.pendingRegister = null;
+    }
     return true;
   }
 
@@ -1074,6 +1114,7 @@ const handleKey = (key, ctx) => {
 
   state.pendingKey = null;
   state.pendingCount = null;
+  state.pendingRegister = null;
   return true;
 };
 

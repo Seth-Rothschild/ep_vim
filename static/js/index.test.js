@@ -2007,6 +2007,9 @@ const resetState = () => {
   state.pendingCount = null;
   state.countBuffer = "";
   state.register = null;
+  state.namedRegisters = {};
+  state.pendingRegister = null;
+  state.awaitingRegister = false;
   state.marks = {};
   state.lastCharSearch = null;
   state.visualAnchor = null;
@@ -3418,95 +3421,212 @@ describe("register bug: Y missing recordCommand", () => {
   });
 });
 
-// --- Missing features (not yet implemented) ---
+describe("missing feature: named registers", () => {
+  beforeEach(resetState);
 
-// describe("missing feature: named registers", () => {
-//   beforeEach(resetState);
-//
-//   it('"ayy yanks into named register a', () => {
-//     // In vim, "a followed by yy copies the line into register 'a'.
-//     // This requires parsing the " prefix in handleKey and routing
-//     // setRegister calls to the named register slot.
-//     const rep = makeRep(["hello"]);
-//     const { editorInfo } = makeMockEditorInfo();
-//     const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello", count: 1, hasCount: false };
-//
-//     // Simulate: " -> a -> yy
-//     handleKey('"', ctx);
-//     handleKey('a', ctx);
-//     handleKey('y', ctx);
-//     handleKey('y', ctx);
-//
-//     assert.ok(state.namedRegisters && state.namedRegisters['a'], 'register a should be set');
-//     assert.deepEqual(state.namedRegisters['a'], ['hello']);
-//   });
-//
-//   it('"ap pastes from named register a', () => {
-//     state.namedRegisters = { a: ['yanked line'] };
-//     const rep = makeRep(["hello"]);
-//     const { editorInfo, calls } = makeMockEditorInfo();
-//     const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello", count: 1, hasCount: false };
-//
-//     // Simulate: " -> a -> p
-//     handleKey('"', ctx);
-//     handleKey('a', ctx);
-//     handleKey('p', ctx);
-//
-//     const replaces = calls.filter((c) => c.type === 'replace');
-//     assert.ok(replaces.length > 0, 'should paste from named register');
-//   });
-//
-//   it('"_dd deletes to blackhole register without overwriting anonymous', () => {
-//     state.register = 'preserved';
-//     const rep = makeRep(['hello', 'world']);
-//     const { editorInfo } = makeMockEditorInfo();
-//     const ctx = { rep, editorInfo, line: 0, char: 0, lineText: 'hello', count: 1, hasCount: false };
-//
-//     // Simulate: " -> _ -> dd
-//     handleKey('"', ctx);
-//     handleKey('_', ctx);
-//     handleKey('d', ctx);
-//     handleKey('d', ctx);
-//
-//     assert.equal(state.register, 'preserved', 'blackhole register should not overwrite anonymous register');
-//   });
-// });
+  it('"ayy yanks into named register a', () => {
+    // In vim, "a followed by yy copies the line into register 'a'.
+    // This requires parsing the " prefix in handleKey and routing
+    // setRegister calls to the named register slot.
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
 
-// describe("missing feature: clipboard read on paste", () => {
-//   beforeEach(resetState);
-//
-//   it("p reads from clipboard when anonymous register is null", async () => {
-//     // In vim, p always pastes the last yank/delete.  A clipboard-aware
-//     // implementation would fall back to reading the system clipboard when
-//     // the in-plugin register is empty (e.g. text copied from another app).
-//     // This requires navigator.clipboard.readText() integration in the p handler.
-//     global.navigator.clipboard.readText = () => Promise.resolve("clipboard text");
-//
-//     state.register = null;
-//     const rep = makeRep(["hello"]);
-//     const { editorInfo, calls } = makeMockEditorInfo();
-//     const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello", count: 1 };
-//
-//     commands.normal["p"](ctx);
-//     await new Promise((r) => setTimeout(r, 10)); // let clipboard promise resolve
-//
-//     const replaces = calls.filter((c) => c.type === "replace");
-//     assert.ok(replaces.length > 0, "p should paste clipboard text when register is null");
-//     assert.equal(replaces[0].newText, "clipboard text");
-//   });
-//
-//   it("p prefers in-plugin register over clipboard when register is set", () => {
-//     // When state.register is set, p should use it (not the clipboard),
-//     // matching vim's behavior of preferring the unnamed register.
-//     state.register = "from register";
-//     const rep = makeRep(["hello"]);
-//     const { editorInfo, calls } = makeMockEditorInfo();
-//     const ctx = { rep, editorInfo, line: 0, char: 0, lineText: "hello", count: 1 };
-//
-//     commands.normal["p"](ctx);
-//
-//     const replaces = calls.filter((c) => c.type === "replace");
-//     assert.ok(replaces.length > 0);
-//     assert.equal(replaces[0].newText, "from register");
-//   });
-// });
+    // Simulate: " -> a -> yy
+    handleKey('"', ctx);
+    handleKey("a", ctx);
+    handleKey("y", ctx);
+    handleKey("y", ctx);
+
+    assert.ok(
+      state.namedRegisters && state.namedRegisters["a"],
+      "register a should be set",
+    );
+    assert.deepEqual(state.namedRegisters["a"], ["hello"]);
+  });
+
+  it('"ap pastes from named register a', () => {
+    state.namedRegisters = { a: ["yanked line"] };
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    // Simulate: " -> a -> p
+    handleKey('"', ctx);
+    handleKey("a", ctx);
+    handleKey("p", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.ok(replaces.length > 0, "should paste from named register");
+  });
+
+  it('"add deletes line into named register a', () => {
+    const rep = makeRep(["hello", "world"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    handleKey('"', ctx);
+    handleKey("a", ctx);
+    handleKey("d", ctx);
+    handleKey("d", ctx);
+
+    assert.ok(
+      state.namedRegisters && state.namedRegisters["a"],
+      "register a should be set after delete",
+    );
+    assert.deepEqual(state.namedRegisters["a"], ["hello"]);
+    assert.equal(state.register, null, "anonymous register should not be set");
+  });
+
+  it('"ayw yanks word into named register a', () => {
+    const rep = makeRep(["hello world"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello world",
+      count: 1,
+      hasCount: false,
+    };
+
+    handleKey('"', ctx);
+    handleKey("a", ctx);
+    handleKey("y", ctx);
+    handleKey("w", ctx);
+
+    assert.deepEqual(state.namedRegisters["a"], "hello ");
+  });
+
+  it("named registers are independent", () => {
+    const rep = makeRep(["first", "second"]);
+    const { editorInfo } = makeMockEditorInfo();
+
+    const ctx0 = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "first",
+      count: 1,
+      hasCount: false,
+    };
+    handleKey('"', ctx0);
+    handleKey("a", ctx0);
+    handleKey("y", ctx0);
+    handleKey("y", ctx0);
+
+    const ctx1 = {
+      rep,
+      editorInfo,
+      line: 1,
+      char: 0,
+      lineText: "second",
+      count: 1,
+      hasCount: false,
+    };
+    handleKey('"', ctx1);
+    handleKey("b", ctx1);
+    handleKey("y", ctx1);
+    handleKey("y", ctx1);
+
+    assert.deepEqual(state.namedRegisters["a"], ["first"]);
+    assert.deepEqual(state.namedRegisters["b"], ["second"]);
+  });
+
+  it('"_yy yank to blackhole does not affect anonymous register', () => {
+    state.register = "preserved";
+    const rep = makeRep(["hello"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    handleKey('"', ctx);
+    handleKey("_", ctx);
+    handleKey("y", ctx);
+    handleKey("y", ctx);
+
+    assert.equal(state.register, "preserved", "anonymous register unchanged");
+  });
+
+  it('"_p pastes nothing from blackhole register', () => {
+    state.register = "fallback";
+    const rep = makeRep(["hello"]);
+    const { editorInfo, calls } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    handleKey('"', ctx);
+    handleKey("_", ctx);
+    handleKey("p", ctx);
+
+    const replaces = calls.filter((c) => c.type === "replace");
+    assert.equal(replaces.length, 0, "blackhole p should paste nothing");
+  });
+
+  it('"_dd deletes to blackhole register without overwriting anonymous', () => {
+    state.register = "preserved";
+    const rep = makeRep(["hello", "world"]);
+    const { editorInfo } = makeMockEditorInfo();
+    const ctx = {
+      rep,
+      editorInfo,
+      line: 0,
+      char: 0,
+      lineText: "hello",
+      count: 1,
+      hasCount: false,
+    };
+
+    // Simulate: " -> _ -> dd
+    handleKey('"', ctx);
+    handleKey("_", ctx);
+    handleKey("d", ctx);
+    handleKey("d", ctx);
+
+    assert.equal(
+      state.register,
+      "preserved",
+      "blackhole register should not overwrite anonymous register",
+    );
+  });
+});

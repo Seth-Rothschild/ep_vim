@@ -17,6 +17,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Text objects** — `iw`/`aw` (word), `i"`/`a"` and `i'`/`a'` (quotes), `i{`/`a{` etc. (brackets), `ip`/`ap` (paragraph), `is`/`as` (sentence)
 - **Operators** — `d`, `c`, `y` with motion and text object combinations (`dw`, `ce`, `y$`, `ciw`, `da"`, `yi(`, etc.)
 - **Line operations** — `dd`, `cc`, `yy`, `J` (join), `Y` (yank line)
+- **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
 - **Editing** — `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
