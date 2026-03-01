@@ -869,6 +869,18 @@ commands.normal["x"] = ({ editorInfo, rep, line, char, lineText, count }) => {
   }
 };
 
+commands.normal["X"] = ({ editorInfo, rep, line, char, lineText, count }) => {
+  if (char > 0) {
+    const deleteCount = Math.min(count, char);
+    const startChar = char - deleteCount;
+    setRegister(lineText.slice(startChar, char));
+    replaceRange(editorInfo, [line, startChar], [line, char], "");
+    const newLineText = getLineText(rep, line);
+    moveBlockCursor(editorInfo, line, clampChar(startChar, newLineText));
+    recordCommand("X", count);
+  }
+};
+
 commands.normal["p"] = ({ editorInfo, line, char, lineText, count }) => {
   const reg = getActiveRegister();
   if (reg !== null) {

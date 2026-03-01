@@ -19,7 +19,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Line operations** — `dd`, `cc`, `yy`, `D`, `J` (join), `Y` (yank line)
 - **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
-- **Editing** — `i` `a` `A` `I` (insert/append), `x`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
+- **Editing** — `i` `a` `A` `I` (insert/append), `x`, `X`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
 - **Search** — `/` and `?` forward/backward, `n`/`N` repeat, `*`/`#` search word under cursor
 - **Scrolling** — `zz`/`zt`/`zb` center/top/bottom, `Ctrl+d`/`Ctrl+u` half-page, `Ctrl+f`/`Ctrl+b` full-page (requires ctrl keys enabled)
@@ -30,8 +30,12 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage; settings panel for system clipboard and ctrl key behavior
 
 ## Differences from vi
+The following are not planned, but PRs are welcome.
 
-- **No command line, macros, or globals** - these are not planned, but PRs welcome.
+- **No command line, macros, or globals** 
+- **No visual block mode**  
+- **No indentation operators** — `>>`, `<<`, and `>` / `<` in visual mode
+- **No increment/decrement** — `Ctrl+a` and `Ctrl+x` 
 
 ## Installation
 

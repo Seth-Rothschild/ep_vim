@@ -1,6 +1,6 @@
 {
   "name": "ep_vim",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "Vim-mode plugin for Etherpad with modal editing, motions, and operators",
   "author": {
     "name": "Seth Rothschild",
@@ -25,7 +25,7 @@
     "ep_etherpad-lite": ">=1.8.6"
   },
   "scripts": {
-    "test": "npm run format && node --test static/js/vim-core.test.js static/js/index.test.js",
+    "test": "npm run format && node --test static/js/vim-core.test.js static/js/motions.test.js static/js/operators.test.js static/js/insert.test.js static/js/visual.test.js static/js/paste_registers.test.js static/js/search.test.js static/js/misc.test.js",
     "format": "prettier -w static/js/*"
   },
   "engines": {
