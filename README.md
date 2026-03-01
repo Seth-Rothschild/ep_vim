@@ -20,6 +20,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
 - **Editing** — `i` `a` `A` `I` (insert/append), `x`, `X`, `r`, `R` (replace mode), `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
+- **Case operators** — `gu{motion}`/`gU{motion}` lowercase/uppercase over motion or text object (e.g. `guiw`, `gUap`); `u`/`U` in visual mode lowercase/uppercase selection
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
 - **Search** — `/` and `?` forward/backward, `n`/`N` repeat, `*`/`#` search word under cursor
 - **Scrolling** — `zz`/`zt`/`zb` center/top/bottom, `Ctrl+d`/`Ctrl+u` half-page, `Ctrl+f`/`Ctrl+b` full-page (requires ctrl keys enabled)
@@ -30,12 +31,20 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Toggle** — toolbar button to enable/disable vim mode, persisted in localStorage; settings panel for system clipboard and ctrl key behavior
 
 ## Differences from vi
-The following are not planned, but PRs are welcome.
+No further features are planned, but PRs are welcome. Notable exclusions in the current implementation are:
 
 - **No command line, macros, or globals** 
 - **No visual block mode**  
 - **No indentation operators** — `>>`, `<<`, and `>` / `<` in visual mode
 - **No increment/decrement** — `Ctrl+a` and `Ctrl+x` 
+
+## Rate limiting
+
+If you encounter rate limit errors, Etherpad's commit rate limiter (default: 10 per second) can be adjusted:
+
+```
+COMMIT_RATE_LIMIT_POINTS=100
+```
 
 ## Installation
 

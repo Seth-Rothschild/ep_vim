@@ -227,6 +227,17 @@ const applyOperator = (op, start, end, ctx) => {
   }
 };
 
+const applyCaseOp = (op, start, end, ctx) => {
+  const { editorInfo, rep } = ctx;
+  const before =
+    start[0] < end[0] || (start[0] === end[0] && start[1] <= end[1]);
+  const [s, e] = before ? [start, end] : [end, start];
+  const text = getTextInRange(rep, s, e);
+  const transformed = op === "gu" ? text.toLowerCase() : text.toUpperCase();
+  replaceRange(editorInfo, s, e, transformed);
+  moveBlockCursor(editorInfo, s[0], s[1]);
+};
+
 // --- Command tables ---
 const commands = {
   normal: {},
@@ -236,6 +247,7 @@ const commands = {
 
 // --- Registration helpers ---
 const OPERATORS = ["d", "c", "y"];
+const CASE_OPERATORS = ["gu", "gU"];
 
 const resolveTextObject = (key, type, line, lineText, char, rep) => {
   if (key === "p") {
@@ -302,6 +314,17 @@ const registerMotion = (
       }
     };
   }
+  for (const op of CASE_OPERATORS) {
+    commands.normal[op + key] = (ctx) => {
+      state.desiredColumn = null;
+      const pos = getEndPos(ctx);
+      if (pos) {
+        const endChar = inclusive ? pos.char + 1 : pos.char;
+        applyCaseOp(op, [ctx.line, ctx.char], [pos.line, endChar], ctx);
+        recordCommand(op + key, ctx.count);
+      }
+    };
+  }
 };
 
 const parameterized = {};
@@ -357,6 +380,14 @@ const registerTextObject = (obj, getRange) => {
       commands.normal[`${op}${type}${obj}`] = (ctx) => {
         const range = getRange(ctx, type);
         if (range) applyOperator(op, range.start, range.end, ctx);
+      };
+    }
+  }
+  for (const op of CASE_OPERATORS) {
+    for (const type of ["i", "a"]) {
+      commands.normal[`${op}${type}${obj}`] = (ctx) => {
+        const range = getRange(ctx, type);
+        if (range) applyCaseOp(op, range.start, range.end, ctx);
       };
     }
   }
@@ -766,6 +797,60 @@ commands["visual-line"]["~"] = (ctx) => {
     toggled += ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase();
   }
   replaceRange(ctx.editorInfo, start, end, toggled);
+  state.mode = "normal";
+  moveBlockCursor(ctx.editorInfo, start[0], start[1]);
+};
+
+commands["visual-char"]["u"] = (ctx) => {
+  const [start, end] = getVisualSelection(
+    "char",
+    state.visualAnchor,
+    state.visualCursor,
+    ctx.rep,
+  );
+  const adjustedEnd = [end[0], end[1] + 1];
+  const text = getTextInRange(ctx.rep, start, adjustedEnd);
+  replaceRange(ctx.editorInfo, start, adjustedEnd, text.toLowerCase());
+  state.mode = "normal";
+  moveBlockCursor(ctx.editorInfo, start[0], start[1]);
+};
+
+commands["visual-char"]["U"] = (ctx) => {
+  const [start, end] = getVisualSelection(
+    "char",
+    state.visualAnchor,
+    state.visualCursor,
+    ctx.rep,
+  );
+  const adjustedEnd = [end[0], end[1] + 1];
+  const text = getTextInRange(ctx.rep, start, adjustedEnd);
+  replaceRange(ctx.editorInfo, start, adjustedEnd, text.toUpperCase());
+  state.mode = "normal";
+  moveBlockCursor(ctx.editorInfo, start[0], start[1]);
+};
+
+commands["visual-line"]["u"] = (ctx) => {
+  const [start, end] = getVisualSelection(
+    "line",
+    state.visualAnchor,
+    state.visualCursor,
+    ctx.rep,
+  );
+  const text = getTextInRange(ctx.rep, start, end);
+  replaceRange(ctx.editorInfo, start, end, text.toLowerCase());
+  state.mode = "normal";
+  moveBlockCursor(ctx.editorInfo, start[0], start[1]);
+};
+
+commands["visual-line"]["U"] = (ctx) => {
+  const [start, end] = getVisualSelection(
+    "line",
+    state.visualAnchor,
+    state.visualCursor,
+    ctx.rep,
+  );
+  const text = getTextInRange(ctx.rep, start, end);
+  replaceRange(ctx.editorInfo, start, end, text.toUpperCase());
   state.mode = "normal";
   moveBlockCursor(ctx.editorInfo, start[0], start[1]);
 };
