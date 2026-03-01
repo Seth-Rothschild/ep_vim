@@ -704,9 +704,9 @@ commands.normal["v"] = ({ editorInfo, rep, line, char }) => {
   updateVisualSelection(editorInfo, rep);
 };
 
-commands.normal["V"] = ({ editorInfo, rep, line }) => {
-  state.visualAnchor = [line, 0];
-  state.visualCursor = [line, 0];
+commands.normal["V"] = ({ editorInfo, rep, line, char }) => {
+  state.visualAnchor = [line, char];
+  state.visualCursor = [line, char];
   state.mode = "visual-line";
   updateVisualSelection(editorInfo, rep);
 };
@@ -785,6 +785,16 @@ commands["visual-line"]["i"] = () => {
 commands["visual-line"]["a"] = () => {
   state.pendingKey = "a";
 };
+
+const swapVisualEnds = ({ editorInfo, rep }) => {
+  const tmp = state.visualAnchor;
+  state.visualAnchor = state.visualCursor;
+  state.visualCursor = tmp;
+  updateVisualSelection(editorInfo, rep);
+};
+
+commands["visual-char"]["o"] = swapVisualEnds;
+commands["visual-line"]["o"] = swapVisualEnds;
 
 commands.normal["gv"] = ({ editorInfo, rep }) => {
   if (!state.lastVisualSelection) return;
@@ -1302,9 +1312,9 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
         cursor: state.visualCursor,
         mode: "visual-line",
       };
-      const line = Math.min(state.visualAnchor[0], state.visualCursor[0]);
+      const [vLine, vChar] = state.visualCursor;
       state.mode = "normal";
-      moveBlockCursor(editorInfo, line, 0);
+      moveBlockCursor(editorInfo, vLine, vChar);
     } else if (state.mode === "visual-char") {
       state.lastVisualSelection = {
         anchor: state.visualAnchor,
