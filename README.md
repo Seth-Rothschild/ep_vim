@@ -19,7 +19,7 @@ A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with
 - **Line operations** — `dd`, `cc`, `yy`, `D`, `J` (join), `Y` (yank line)
 - **Registers** — `"a`–`"z` named registers for yank/delete/put, `"_` blackhole register
 - **Put** — `p` / `P` with linewise and characterwise register handling
-- **Editing** — `i` `a` `A` `I` (insert/append), `x`, `X`, `r`, `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
+- **Editing** — `i` `a` `A` `I` (insert/append), `x`, `X`, `r`, `R` (replace mode), `s`, `S`, `C`, `o`, `O`, `~` (toggle case)
 - **Marks** — `m{a-z}` to set, `'{a-z}` / `` `{a-z} `` to jump
 - **Search** — `/` and `?` forward/backward, `n`/`N` repeat, `*`/`#` search word under cursor
 - **Scrolling** — `zz`/`zt`/`zb` center/top/bottom, `Ctrl+d`/`Ctrl+u` half-page, `Ctrl+f`/`Ctrl+b` full-page (requires ctrl keys enabled)

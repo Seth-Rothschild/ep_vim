@@ -850,6 +850,12 @@ commands.normal["O"] = ({ editorInfo, line }) => {
   state.mode = "insert";
 };
 
+commands.normal["R"] = ({ editorInfo, line, char }) => {
+  clearEmptyLineCursor();
+  moveCursor(editorInfo, line, char);
+  state.mode = "replace";
+};
+
 // --- Editing commands ---
 
 commands.normal["r"] = () => {
@@ -1324,7 +1330,7 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
       const [vLine, vChar] = state.visualCursor;
       state.mode = "normal";
       moveBlockCursor(editorInfo, vLine, vChar);
-    } else if (state.mode === "insert") {
+    } else if (state.mode === "insert" || state.mode === "replace") {
       state.mode = "normal";
       const [curLine, curChar] = rep.selStart;
       moveBlockCursor(editorInfo, curLine, Math.max(0, curChar - 1));
@@ -1341,6 +1347,40 @@ exports.aceKeyEvent = (_hookName, { evt, rep, editorInfo }) => {
   }
 
   if (state.mode === "insert") return false;
+
+  if (state.mode === "replace") {
+    if (evt.key === "Backspace") {
+      const [curLine, curChar] = rep.selStart;
+      if (curChar > 0) {
+        moveCursor(editorInfo, curLine, curChar - 1);
+      }
+      evt.preventDefault();
+      return true;
+    }
+    if (evt.key.length === 1 && !evt.ctrlKey && !evt.metaKey) {
+      const [curLine, curChar] = rep.selStart;
+      const curLineText = rep.lines.atIndex(curLine).text;
+      if (curChar < curLineText.length) {
+        replaceRange(
+          editorInfo,
+          [curLine, curChar],
+          [curLine, curChar + 1],
+          evt.key,
+        );
+      } else {
+        replaceRange(
+          editorInfo,
+          [curLine, curChar],
+          [curLine, curChar],
+          evt.key,
+        );
+      }
+      moveCursor(editorInfo, curLine, curChar + 1);
+      evt.preventDefault();
+      return true;
+    }
+    return false;
+  }
 
   if (state.searchMode) {
     if (evt.key === "Enter") {

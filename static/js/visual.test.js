@@ -184,8 +184,8 @@ describe("visual mode", () => {
     commands.normal["V"](ctx);
 
     assert.equal(state.mode, "visual-line");
-    assert.deepEqual(state.visualAnchor, [0, 0]);
-    assert.deepEqual(state.visualCursor, [0, 0]);
+    assert.deepEqual(state.visualAnchor, [0, 2]);
+    assert.deepEqual(state.visualCursor, [0, 2]);
   });
 
   it("y in visual-line yanks lines", () => {
