@@ -1,6 +1,6 @@
 {
   "name": "ep_vim",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Vim-mode plugin for Etherpad with modal editing, motions, and operators",
   "author": {
     "name": "Seth Rothschild",
@@ -31,7 +31,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "dependencies": {
+  "devDependencies": {
     "prettier": "^3.8.1"
   }
 }
