@@ -6,7 +6,7 @@
 
 A vim-mode plugin for [Etherpad](https://etherpad.org/). Adds modal editing with normal, insert, and visual modes to the pad editor.  Mostly vibe coded with [Claude Code](https://claude.ai/claude-code).
 
-![demo](./demo.gif)
+![demo](https://raw.githubusercontent.com/Seth-Rothschild/ep_vim/main/demo.gif)
 
 ## Features
 
